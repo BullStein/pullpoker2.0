@@ -1,0 +1,166 @@
+{
+  "users": {},
+  "bets": [
+    {
+      "id": "b_demo1",
+      "title": "Quem vai ganhar o primeiro jogo da noite?",
+      "type": "fixa",
+      "options": [
+        "Time A",
+        "Time B"
+      ],
+      "creator": "O Salão",
+      "status": "aberta",
+      "wagers": [],
+      "winner": null,
+      "createdAt": 1789592518683
+    }
+  ],
+  "chat": [
+    {
+      "user": "A Casa",
+      "text": "Bem-vindo! Escolha um nome, pegue seu bônus e boa sorte.",
+      "ts": 1789592518683,
+      "house": true
+    }
+  ],
+  "banned": [],
+  "settings": {
+    "startBalance": 500
+  },
+  "shop": {
+    "colors": [
+      {
+        "id": "c_gold",
+        "label": "Dourado",
+        "hex": "#e8c85a",
+        "price": 150
+      },
+      {
+        "id": "c_silver",
+        "label": "Prata",
+        "hex": "#c9c9d1",
+        "price": 150
+      },
+      {
+        "id": "c_green",
+        "label": "Verde Neon",
+        "hex": "#39ff8f",
+        "price": 200
+      },
+      {
+        "id": "c_blue",
+        "label": "Azul Elétrico",
+        "hex": "#2e8bff",
+        "price": 200
+      },
+      {
+        "id": "c_purple",
+        "label": "Roxo Real",
+        "hex": "#a34bff",
+        "price": 250
+      },
+      {
+        "id": "c_white",
+        "label": "Branco Puro",
+        "hex": "#ffffff",
+        "price": 100
+      }
+    ],
+    "tags": [
+      {
+        "id": "t_apostador",
+        "label": "Apostador",
+        "price": 100
+      },
+      {
+        "id": "t_sortudo",
+        "label": "Sortudo",
+        "price": 150
+      },
+      {
+        "id": "t_tubarao",
+        "label": "Tubarão",
+        "price": 300
+      },
+      {
+        "id": "t_banqueiro",
+        "label": "Banqueiro",
+        "price": 400
+      },
+      {
+        "id": "t_lenda",
+        "label": "Lenda",
+        "price": 600
+      }
+    ],
+    "crests": [
+      {
+        "id": "k_dice",
+        "emoji": "🎲",
+        "label": "Dados",
+        "price": 50
+      },
+      {
+        "id": "k_spade",
+        "emoji": "♠️",
+        "label": "Espadas",
+        "price": 80
+      },
+      {
+        "id": "k_joker",
+        "emoji": "🃏",
+        "label": "Joker",
+        "price": 120
+      },
+      {
+        "id": "k_money",
+        "emoji": "💰",
+        "label": "Saco de Grana",
+        "price": 150
+      },
+      {
+        "id": "k_fire",
+        "emoji": "🔥",
+        "label": "Fogo",
+        "price": 150
+      },
+      {
+        "id": "k_bolt",
+        "emoji": "⚡",
+        "label": "Raio",
+        "price": 180
+      },
+      {
+        "id": "k_skull",
+        "emoji": "☠️",
+        "label": "Caveira",
+        "price": 200
+      },
+      {
+        "id": "k_gem",
+        "emoji": "💎",
+        "label": "Diamante",
+        "price": 250
+      },
+      {
+        "id": "k_shark",
+        "emoji": "🦈",
+        "label": "Tubarão",
+        "price": 300
+      },
+      {
+        "id": "k_dragon",
+        "emoji": "🐉",
+        "label": "Dragão",
+        "price": 350
+      },
+      {
+        "id": "k_crown",
+        "emoji": "👑",
+        "label": "Coroa",
+        "price": 400
+      }
+    ]
+  }
+}
