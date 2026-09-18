@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>O Salão — Painel do Host</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+<script src="app.js"></script>
+<script>
+let shopTab = 'colors';
+let newCrestEmoji = '';
+
+function render(){
+  const app = document.getElementById('app');
+  loadSession();
+  if(!sessionStillValid()){
+    clearSession();
+    app.innerHTML = navHTML('painel.html') + `<div class="guard-msg"><h2>Você precisa entrar</h2><p><a href="index.html">Ir para a Mesa</a></p></div>`;
+    bindNav();
+    return;
+  }
+  const user = state.users[me.key];
+  if(!user.isAdmin){
+    app.innerHTML = navHTML('painel.html') + `<div class="guard-msg"><h2>Área restrita</h2><p>Só a conta do host pode ver o painel.</p></div>`;
+    bindNav();
+    return;
+  }
+  app.innerHTML = navHTML('painel.html') + renderPanel();
+  bindPanel();
+}
+
+function renderPanel(){
+  const banned = state.banned || [];
+  const shopTabs = [['colors','Cores'],['tags','Tags'],['crests','Brasões'],['avatars','Fotos de perfil']];
+
+  return `
+    <div class="admin-hero">
+      <h1 class="display">Painel do Host</h1>
+      <p>Controle total da mesa — jogadores, chat, loja e as regras do cassino.</p>
+    </div>
+    <div class="admin-grid">
+      <div>
+        <div class="card side-card">
+          <h3>♠ Jogadores</h3>
+          <div class="admin-sub">
+            <h4>Dar / zerar pontos</h4>
+            <div class="admin-row">
+              <input type="text" id="grantName" placeholder="nome do jogador" />
+              <input type="number" id="grantAmt" placeholder="pontos" style="width:90px;" />
+              <button id="grantBtn">Dar pontos</button>
+            </div>
+            <div class="admin-row">
+              <input type="text" id="resetName" placeholder="nome do jogador" />
+              <button id="resetBtn">Zerar saldo</button>
+            </div>
+            <div class="admin-note">Pontos concedidos aqui não saem de ninguém — são criados pela casa.</div>
+          </div>
+          <div class="admin-sub">
+            <h4>Saldo inicial de novos jogadores</h4>
+            <div class="admin-row">
+              <input type="number" id="startBalanceInput" value="${state.settings.startBalance}" style="width:100px;" />
+              <button id="setStartBalanceBtn">Salvar</button>
+            </div>
+          </div>
+          <div class="admin-sub">
+            <h4>Banir jogador</h4>
+            <div class="admin-row">
+              <input type="text" id="banName" placeholder="nome do jogador" />
+              <button id="banBtn">Banir</button>
+            </div>
+            <div class="banned-list">
+              ${banned.length ? banned.map(n=> `<div class="banned-chip">${escapeHTML(n)}<button data-unban="${escapeAttr(n)}">×</button></div>`).join('') : '<span style="font-size:11.5px;color:var(--muted);">Ninguém banido.</span>'}
+            </div>
+          </div>
+        </div>
+
+        <div class="card side-card">
+          <h3>♥ Chat e mesa</h3>
+          <div class="admin-sub">
+            <h4>Anunciar como A Casa</h4>
+            <div class="admin-row">
+              <input type="text" id="announceInput" placeholder="mensagem para o chat" />
+              <button id="announceBtn">Enviar</button>
+            </div>
+          </div>
+          <div class="admin-sub">
+            <h4>Ações rápidas</h4>
+            <div class="admin-row">
+              <button id="clearChatBtn" style="flex:1;">Limpar chat</button>
+              <button id="cancelAllBetsBtn" style="flex:1;">Cancelar apostas abertas</button>
+            </div>
+            <div class="admin-note">Para excluir uma aposta encerrada específica, use o botão "Excluir postagem" dela na Mesa.</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card side-card">
+          <h3>♦ Regras do cassino</h3>
+          <div class="admin-sub">
+            <h4>Custo para abrir uma aposta</h4>
+            <div class="admin-row">
+              <input type="number" id="cfgBetCost" value="${config.betCost}" style="width:100px;" />
+              <span style="font-size:12px;color:var(--dim);">pontos</span>
+            </div>
+          </div>
+          <div class="admin-sub">
+            <h4>Pontos grátis</h4>
+            <div class="admin-row">
+              <input type="number" id="cfgFpAmount" value="${config.freePoints.amount}" placeholder="valor" style="width:100px;" />
+              <span style="font-size:12px;color:var(--dim);">pontos a cada</span>
+              <input type="number" id="cfgFpCooldown" value="${config.freePoints.cooldownMinutes}" placeholder="minutos" style="width:90px;" />
+              <span style="font-size:12px;color:var(--dim);">min</span>
+            </div>
+          </div>
+          <div class="admin-sub">
+            <h4>Caça-níquel</h4>
+            <div class="admin-row">
+              <span style="font-size:12px;color:var(--dim);width:100%;">Tempo de espera entre giros grátis:</span>
+              <input type="number" id="cfgSlotCooldown" value="${config.slot.cooldownSeconds}" style="width:90px;" />
+              <span style="font-size:12px;color:var(--dim);">segundos</span>
+            </div>
+            <div class="admin-row">
+              <span style="font-size:12px;color:var(--dim);width:100%;">Ganhos por resultado:</span>
+            </div>
+            <div class="admin-row">
+              <span style="font-size:12px;color:var(--dim);width:70px;">🎰 três 7️⃣</span>
+              <input type="number" id="cfgPayTriple7" value="${config.slot.payouts.triple7}" style="width:90px;" />
+              <span style="font-size:12px;color:var(--dim);width:90px;">três iguais</span>
+              <input type="number" id="cfgPayTripleOutro" value="${config.slot.payouts.tripleOutro}" style="width:90px;" />
+            </div>
+            <div class="admin-row">
+              <span style="font-size:12px;color:var(--dim);width:70px;">duas iguais</span>
+              <input type="number" id="cfgPayPar" value="${config.slot.payouts.par}" style="width:90px;" />
+              <span style="font-size:12px;color:var(--dim);width:90px;">nada bateu</span>
+              <input type="number" id="cfgPayNada" value="${config.slot.payouts.nada}" style="width:90px;" />
+            </div>
+          </div>
+          <div class="admin-row" style="margin-top:10px;">
+            <button id="saveConfigBtn" style="flex:1;background:var(--brass-bright);color:#221004;font-weight:700;">Salvar regras do cassino</button>
+          </div>
+        </div>
+
+        <div class="card side-card">
+          <h3>♣ Gerenciar loja</h3>
+          <div class="shop-tabs">
+            ${shopTabs.map(([k,label])=> `<button class="shop-tab ${shopTab===k?'active':''}" data-shoptab="${k}">${label}</button>`).join('')}
+          </div>
+          ${shopTab==='crests'||shopTab==='avatars' ? `
+            <div class="emoji-pick-row">
+              ${CREST_SUGGESTIONS.map(e=> `<button type="button" class="emoji-pick ${newCrestEmoji===e?'active':''}" data-pick-emoji="${e}">${e}</button>`).join('')}
+            </div>
+          ` : ''}
+          <div class="admin-row">
+            ${shopTab==='crests'||shopTab==='avatars' ? `<input type="text" id="newItemEmoji" placeholder="emoji" style="width:60px;" value="${escapeAttr(newCrestEmoji)}" maxlength="4" />` : ''}
+            <input type="text" id="newItemLabel" placeholder="${shopTab==='tags' ? 'texto da tag' : 'nome do item'}" />
+            ${shopTab==='colors' ? `<input type="color" id="newItemHex" value="#c9a24b" style="width:50px;padding:2px;" />` : ''}
+            <input type="number" id="newItemPrice" placeholder="preço" style="width:80px;" />
+            <button id="addShopItemBtn">Adicionar</button>
+          </div>
+          <div class="shop-manage-list">
+            ${(state.shop[shopTab]||[]).map(it=> `<div class="shop-chip">${(shopTab==='crests'||shopTab==='avatars') ? it.emoji+' ' : ''}${escapeHTML(it.label)}<button data-remove-item="${shopTab}" data-remove-id="${escapeAttr(it.id)}">×</button></div>`).join('') || '<span style="font-size:11.5px;color:var(--muted);">Vazio.</span>'}
+          </div>
+          <div class="admin-note">Itens removidos daqui deixam de aparecer na loja (quem já comprou mantém o que tinha).</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function refreshAndSave(mutator){
+  await loadState();
+  mutator();
+  await saveState();
+  render();
+}
+
+function bindPanel(){
+  document.getElementById('grantBtn').onclick = async ()=>{
+    const name = document.getElementById('grantName').value.trim();
+    const amt = parseInt(document.getElementById('grantAmt').value, 10);
+    if(!name || !amt){ toast('Preencha nome e valor'); return; }
+    const key = name.toLowerCase();
+    if(!state.users[key]){ toast('Jogador não encontrado'); return; }
+    await refreshAndSave(()=>{ state.users[key].balance += amt; });
+    toast(`${fmt(amt)} pontos concedidos a ${name}`);
+  };
+  document.getElementById('resetBtn').onclick = async ()=>{
+    const name = document.getElementById('resetName').value.trim();
+    if(!name){ toast('Preencha o nome'); return; }
+    const key = name.toLowerCase();
+    if(!state.users[key]){ toast('Jogador não encontrado'); return; }
+    await refreshAndSave(()=>{ state.users[key].balance = state.settings.startBalance; });
+    toast(`${name} foi zerado para ${state.settings.startBalance}`);
+  };
+  document.getElementById('setStartBalanceBtn').onclick = async ()=>{
+    const val = parseInt(document.getElementById('startBalanceInput').value, 10);
+    if(isNaN(val) || val<0){ toast('Valor inválido'); return; }
+    await refreshAndSave(()=>{ state.settings.startBalance = val; });
+    toast(`Saldo inicial definido para ${fmt(val)}`);
+  };
+  document.getElementById('announceBtn').onclick = async ()=>{
+    const input = document.getElementById('announceInput');
+    const text = input.value.trim();
+    if(!text){ toast('Escreva uma mensagem'); return; }
+    await refreshAndSave(()=>{
+      if(!state.chat) state.chat = [];
+      state.chat.push({ id: uid('m_'), user: me.username, text, ts: Date.now(), house: true });
+      if(state.chat.length > 200) state.chat = state.chat.slice(-200);
+    });
+    toast('Anúncio enviado ao chat');
+  };
+  document.getElementById('banBtn').onclick = async ()=>{
+    const name = document.getElementById('banName').value.trim();
+    if(!name){ toast('Preencha o nome'); return; }
+    await refreshAndSave(()=>{
+      if(!state.banned) state.banned = [];
+      if(!state.banned.includes(name)) state.banned.push(name);
+    });
+    toast(`${name} foi banido da mesa`);
+  };
+  document.querySelectorAll('[data-unban]').forEach(b=>{
+    b.onclick = async ()=>{
+      const name = b.dataset.unban;
+      await refreshAndSave(()=>{ state.banned = (state.banned||[]).filter(n=> n!==name); });
+      toast(`${name} foi desbanido`);
+    };
+  });
+  document.getElementById('clearChatBtn').onclick = async ()=>{
+    if(!confirm('Limpar todo o histórico do chat?')) return;
+    await refreshAndSave(()=>{ state.chat = []; });
+    toast('Chat limpo');
+  };
+  document.getElementById('cancelAllBetsBtn').onclick = async ()=>{
+    if(!confirm('Cancelar TODAS as apostas abertas e devolver os pontos apostados?')) return;
+    await refreshAndSave(()=>{
+      const open = state.bets.filter(b=> b.status==='aberta');
+      open.forEach(b=>{ b.wagers.forEach(w=>{ const u=state.users[String(w.user).toLowerCase()]; if(u) u.balance += w.amount; }); });
+      state.bets = state.bets.filter(b=> b.status!=='aberta');
+    });
+    toast('Apostas abertas canceladas, pontos devolvidos');
+  };
+
+  document.getElementById('saveConfigBtn').onclick = async ()=>{
+    const betCost = parseInt(document.getElementById('cfgBetCost').value,10);
+    const fpAmount = parseInt(document.getElementById('cfgFpAmount').value,10);
+    const fpCooldown = parseInt(document.getElementById('cfgFpCooldown').value,10);
+    const slotCooldown = parseInt(document.getElementById('cfgSlotCooldown').value,10);
+    const payTriple7 = parseInt(document.getElementById('cfgPayTriple7').value,10);
+    const payTripleOutro = parseInt(document.getElementById('cfgPayTripleOutro').value,10);
+    const payPar = parseInt(document.getElementById('cfgPayPar').value,10);
+    const payNada = parseInt(document.getElementById('cfgPayNada').value,10);
+    if([betCost,fpAmount,fpCooldown,slotCooldown,payTriple7,payTripleOutro,payPar,payNada].some(v=> isNaN(v) || v<0)){
+      toast('Preencha todos os valores com números válidos'); return;
+    }
+    await loadConfig();
+    config.betCost = betCost;
+    config.freePoints = { amount: fpAmount, cooldownMinutes: fpCooldown };
+    config.slot = { cooldownSeconds: slotCooldown, payouts: { triple7: payTriple7, tripleOutro: payTripleOutro, par: payPar, nada: payNada } };
+    await saveConfig();
+    toast('Regras do cassino salvas');
+    render();
+  };
+
+  document.querySelectorAll('[data-shoptab]').forEach(b=>{
+    b.onclick = ()=>{ shopTab = b.dataset.shoptab; render(); };
+  });
+  document.querySelectorAll('[data-pick-emoji]').forEach(b=>{
+    b.onclick = ()=>{ newCrestEmoji = b.dataset.pickEmoji; render(); };
+  });
+  document.getElementById('addShopItemBtn').onclick = async ()=>{
+    const labelEl = document.getElementById('newItemLabel');
+    const priceEl = document.getElementById('newItemPrice');
+    const label = labelEl ? labelEl.value.trim() : '';
+    const price = parseInt(priceEl ? priceEl.value : '', 10);
+    if(!label){ toast('Dê um nome ao item'); return; }
+    if(isNaN(price) || price<0){ toast('Preço inválido'); return; }
+    const newItem = { id: uid('custom_'), label, price };
+    if(shopTab==='colors'){
+      const hexEl = document.getElementById('newItemHex');
+      newItem.hex = hexEl ? hexEl.value : '#c9a24b';
+    }
+    if(shopTab==='crests' || shopTab==='avatars'){
+      const emojiEl = document.getElementById('newItemEmoji');
+      const emoji = emojiEl ? emojiEl.value.trim() : '';
+      if(!emoji){ toast('Escolha ou digite um emoji'); return; }
+      newItem.emoji = emoji;
+    }
+    await refreshAndSave(()=>{
+      if(!state.shop[shopTab]) state.shop[shopTab] = [];
+      state.shop[shopTab].push(newItem);
+    });
+    newCrestEmoji = '';
+    toast('Item adicionado à loja');
+  };
+  document.querySelectorAll('[data-remove-item]').forEach(b=>{
+    b.onclick = async ()=>{
+      const cat = b.dataset.removeItem, id = b.dataset.removeId;
+      if(!confirm('Remover este item da loja?')) return;
+      await refreshAndSave(()=>{ state.shop[cat] = (state.shop[cat]||[]).filter(i=> i.id!==id); });
+      toast('Item removido da loja');
+    };
+  });
+}
+
+async function boot(){
+  loadSession();
+  await loadState();
+  await loadConfig();
+  render();
+}
+boot();
+</script>
+</body>
+</html>

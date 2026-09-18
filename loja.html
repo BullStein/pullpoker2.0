@@ -3,22 +3,96 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Loja · O Salão</title>
+<title>O Salão — Loja</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header class="topbar" id="topbar"></header>
-<div class="announce" id="announce"></div>
-<div class="ribbon" id="ribbon"></div>
-<div class="wrap">
-  <main id="page"></main>
-  <aside class="rail" id="rail"></aside>
-</div>
-<div class="toast" id="toast"></div>
+<div id="app"></div>
+<div id="toast"></div>
 <script src="app.js"></script>
-<script>Salao.init('loja');</script>
+<script>
+let shopTab = 'colors';
+
+function render(){
+  const app = document.getElementById('app');
+  loadSession();
+  if(!sessionStillValid()){
+    clearSession();
+    app.innerHTML = navHTML('loja.html') + `
+      <div class="guard-msg"><h2>Você precisa entrar</h2><p>Volte para a mesa e crie sua conta ou faça login para acessar a loja.</p>
+      <p><a href="index.html">Ir para a Mesa</a></p></div>`;
+    bindNav();
+    return;
+  }
+  app.innerHTML = navHTML('loja.html') + renderShop();
+  bindShop();
+}
+
+function renderShop(){
+  const user = state.users[me.key];
+  const tabs = [['colors','Cores de nome'],['tags','Tags'],['crests','Brasões'],['avatars','Foto de perfil']];
+  const items = state.shop[shopTab] || [];
+  const owned = user.owned[shopTab] || [];
+  const eqField = shopTab==='colors' ? 'color' : shopTab==='tags' ? 'tag' : shopTab==='avatars' ? 'avatar' : 'crest';
+  const equippedId = user.equipped[eqField];
+
+  const rows = items.length ? items.map(it=>{
+    const isOwned = owned.includes(it.id);
+    const isEquipped = equippedId === it.id;
+    const canAfford = user.balance >= it.price;
+    const preview = shopTab === 'colors'
+      ? `<div class="preview" style="background:${it.hex};"></div>`
+      : `<div class="preview emoji">${it.emoji || ''}${!it.emoji ? '' : ''}</div>`;
+    const previewFinal = shopTab==='tags' ? `<div class="label-tag">${escapeHTML(it.label)}</div>` : preview;
+    let btn;
+    if(isOwned){
+      btn = `<button class="ibtn ${isEquipped?'equipped':'equip'}" data-equip="${shopTab}" data-id="${escapeAttr(it.id)}">${isEquipped ? 'Equipado' : 'Equipar'}</button>`;
+    } else {
+      btn = `<button class="ibtn ${canAfford?'buy':'locked'}" data-buy="${shopTab}" data-id="${escapeAttr(it.id)}" ${canAfford?'':'disabled'}>Comprar</button>`;
+    }
+    return `<div class="shop-item">
+      ${previewFinal}
+      <div class="info">
+        <div class="iname">${escapeHTML(it.label)}</div>
+        <div class="iprice mono">${it.price>0 ? fmt(it.price)+' pts' : 'grátis'}</div>
+      </div>
+      ${btn}
+    </div>`;
+  }).join('') : '<div class="shop-empty">O host ainda não adicionou itens aqui.</div>';
+
+  return `
+    <div class="shop-hero">
+      <h1 class="display">A Loja</h1>
+      <p>Gaste seus pontos em estilo — cores, tags, brasões e uma foto de perfil pra chamar de sua.</p>
+    </div>
+    <div class="shop-tabs">
+      ${tabs.map(([k,label])=> `<button class="shop-tab ${shopTab===k?'active':''}" data-shoptab="${k}">${label}</button>`).join('')}
+    </div>
+    <div class="shop-grid">${rows}</div>
+  `;
+}
+
+function bindShop(){
+  document.querySelectorAll('[data-shoptab]').forEach(b=>{
+    b.onclick = ()=>{ shopTab = b.dataset.shoptab; render(); };
+  });
+  document.querySelectorAll('[data-buy]').forEach(b=>{
+    b.onclick = async ()=>{ await buyItem(b.dataset.buy, b.dataset.id); render(); };
+  });
+  document.querySelectorAll('[data-equip]').forEach(b=>{
+    b.onclick = async ()=>{ await equipItem(b.dataset.equip, b.dataset.id); render(); };
+  });
+}
+
+async function boot(){
+  loadSession();
+  await loadState();
+  render();
+  setInterval(async ()=>{ await loadState(); if(sessionStillValid()) render(); }, 4000);
+}
+boot();
+</script>
 </body>
 </html>

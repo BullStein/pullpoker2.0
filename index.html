@@ -3,22 +3,579 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mesa · O Salão</title>
+<title>O Salão — Mesa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header class="topbar" id="topbar"></header>
-<div class="announce" id="announce"></div>
-<div class="ribbon" id="ribbon"></div>
-<div class="wrap">
-  <main id="page"></main>
-  <aside class="rail" id="rail"></aside>
-</div>
-<div class="toast" id="toast"></div>
+<div id="app"></div>
+<div id="toast"></div>
 <script src="app.js"></script>
-<script>Salao.init('mesa');</script>
+<script>
+let gateMode = 'login';
+let gateError = '';
+let newBetOpen = false;
+let newBetType = 'fixa';
+let newBetExpiry = '24h';
+let chatDraft = '';
+let spinning = false;
+let now = Date.now();
+
+function tickerHTML(){
+  const resolved = state.bets.filter(b=> b.status==='fechada').slice(-10).reverse();
+  if(resolved.length===0) return '';
+  const items = resolved.map(b=>{
+    const label = b.winner === 'Nenhuma das opções' ? 'a casa levou tudo' : `venceu "${escapeHTML(b.winner)}"`;
+    return `<span><b>${escapeHTML(b.title)}</b> — ${label}</span>`;
+  }).join('');
+  return items + items;
+}
+
+function render(){
+  const app = document.getElementById('app');
+  loadSession();
+  if(!sessionStillValid()){
+    clearSession();
+    app.innerHTML = navHTML('index.html') + renderGate();
+    bindNav();
+    bindGate();
+    return;
+  }
+  app.innerHTML = renderApp();
+  bindApp();
+  const log = document.getElementById('chatLog');
+  if(log) log.scrollTop = log.scrollHeight;
+}
+
+function renderGate(){
+  return `
+    <div class="gate">
+      <div class="kanji">apostas entre amigos</div>
+      <h1 class="display">O <span>Salão</span></h1>
+      <p>Crie uma conta com senha para sentar à mesa.</p>
+      ${serverUnreachable ? `<div class="gate-error" style="margin-bottom:12px;">Não consegui falar com o servidor. Confirme que "python3 server.py" está rodando e que você abriu o endereço http://... (não o arquivo index.html direto).</div>` : ''}
+      <div class="gate-card">
+        <div class="gate-tabs">
+          <button class="gate-tab ${gateMode==='login'?'active':''}" data-mode="login">Entrar</button>
+          <button class="gate-tab ${gateMode==='register'?'active':''}" data-mode="register">Criar conta</button>
+        </div>
+        <input id="gateName" type="text" placeholder="Seu nome de mesa" maxlength="20" autocomplete="username" />
+        <input id="gatePass" type="password" placeholder="Senha" autocomplete="${gateMode==='login'?'current-password':'new-password'}" />
+        <div class="gate-error">${gateError ? escapeHTML(gateError) : ''}</div>
+        <button class="submit" id="gateBtn">${gateMode==='login' ? 'Entrar no salão' : 'Criar conta e entrar'}</button>
+      </div>
+    </div>
+  `;
+}
+function bindGate(){
+  document.querySelectorAll('.gate-tab').forEach(b=>{
+    b.onclick = ()=>{ gateMode = b.dataset.mode; gateError=''; render(); };
+  });
+  const btn = document.getElementById('gateBtn');
+  const nameEl = document.getElementById('gateName');
+  const passEl = document.getElementById('gatePass');
+  const submit = async ()=>{
+    const name = nameEl.value, pass = passEl.value;
+    if(!name.trim()){ gateError='Escolha um nome'; render(); return; }
+    btn.disabled = true;
+    try{
+      const result = gateMode==='login' ? await loginAccount(name, pass) : await registerAccount(name, pass);
+      if(!result.ok){ gateError = result.error; btn.disabled=false; render(); return; }
+      gateError=''; newBetOpen=false;
+      await loadConfig();
+      render();
+    }catch(err){
+      console.error(err);
+      gateError = 'Algo deu errado (' + (err && err.message ? err.message : 'erro desconhecido') + '). Veja o console do navegador.';
+      btn.disabled = false;
+      render();
+    }
+  };
+  btn.onclick = submit;
+  passEl.addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
+}
+
+function renderApp(){
+  const user = state.users[me.key];
+  const sorted = [...state.bets].sort((a,b)=> b.createdAt - a.createdAt);
+  const leaderboard = Object.values(state.users)
+    .filter(u=> !u.hidden)
+    .sort((a,b)=> b.balance - a.balance)
+    .slice(0, 8);
+
+  const fp = config.freePoints;
+  const bonusCooldownMs = fp.cooldownMinutes * 60 * 1000;
+  const bonusReady = now - (user.lastBonus||0) >= bonusCooldownMs;
+  const bonusRemain = Math.max(0, bonusCooldownMs - (now - (user.lastBonus||0)));
+
+  const spinCooldownMs = config.slot.cooldownSeconds * 1000;
+  const spinReady = now - (user.lastSpin||0) >= spinCooldownMs;
+  const spinRemain = Math.max(0, spinCooldownMs - (now - (user.lastSpin||0)));
+
+  const tHTML = tickerHTML();
+
+  return `
+    ${navHTML('index.html')}
+    <div class="ticker-wrap ${tHTML ? '' : 'empty'}"><div class="ticker">${tHTML}</div></div>
+
+    <div class="layout">
+      <div>
+        <div class="section-head">
+          <h2>Mesa de apostas</h2>
+          <button class="new-bet-toggle" id="toggleNewBet">${newBetOpen ? 'Cancelar' : '+ Abrir aposta'}</button>
+        </div>
+        ${newBetOpen ? renderNewBetForm() : ''}
+        <div class="bet-list">
+          ${sorted.length ? sorted.map(b=> renderBet(b, user)).join('') : '<div class="empty-state">Nenhuma aposta na mesa ainda. Abra a primeira.</div>'}
+        </div>
+      </div>
+
+      <div>
+        <div class="card side-card chat-card">
+          <h3>♦ Chat ao vivo</h3>
+          <div class="chat-log" id="chatLog">
+            ${(state.chat||[]).length ? (state.chat||[]).map(m=>`
+              <div class="chat-msg ${m.house?'house':''}">
+                ${(me.username===m.user || (state.users[me.key]&&state.users[me.key].isAdmin)) ? `<button class="chat-del" data-del-msg="${m.id}" title="excluir">×</button>` : ''}
+                ${nameHTML(m.user)}<span class="chat-time mono">${fmtTime(m.ts)}</span><br>${escapeHTML(m.text)}
+              </div>
+            `).join('') : '<div class="chat-empty">Ninguém falou nada ainda.</div>'}
+          </div>
+          <div class="chat-input-row">
+            <input type="text" id="chatInput" placeholder="Escreva algo..." maxlength="240" value="${escapeAttr(chatDraft)}" />
+            <button id="chatSendBtn">Enviar</button>
+          </div>
+        </div>
+
+        <div class="card side-card">
+          <h3>♣ Recompensas</h3>
+          <div class="bonus-row">
+            <div class="desc">Pontos grátis a cada ${fp.cooldownMinutes} min</div>
+            <button class="bonus-btn ${bonusReady?'':'cooldown'}" id="bonusBtn" ${bonusReady?'':'disabled'}>
+              ${bonusReady ? '+ '+fp.amount : fmtClock(bonusRemain)}
+            </button>
+          </div>
+          <div style="border-top:1px solid var(--line);margin:12px 0;"></div>
+          <div style="font-size:12.5px;color:var(--dim);margin-bottom:6px;">Caça-níquel grátis</div>
+          <div class="slot" id="slotReels">
+            <div class="reel">🎲</div><div class="reel">🎲</div><div class="reel">🎲</div>
+          </div>
+          <div class="slot-result" id="slotResult"></div>
+          <button class="bonus-btn ${spinReady?'':'cooldown'}" style="width:100%;margin-top:6px;" id="spinBtn" ${spinReady||spinning ? '':'disabled'}>
+            ${spinning ? 'girando…' : (spinReady ? 'Girar' : fmtClock(spinRemain))}
+          </button>
+        </div>
+
+        <div class="card side-card">
+          <h3>♥ Ranking da noite</h3>
+          ${leaderboard.map((u,i)=>`
+            <div class="leaderboard-row ${u.username===me.username?'me':''}">
+              <div class="rank mono">${i+1}</div>
+              <div class="name">${avatarBadgeHTML(u.username,22)}${nameHTML(u.username)}</div>
+              <div class="amt mono">${fmt(u.balance)}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderNewBetForm(){
+  return `
+    <div class="card new-bet-form">
+      <div class="row">
+        <input type="text" id="betTitle" placeholder='Ex: "Vai chover até sábado?"' />
+      </div>
+      <div class="row">
+        <div class="type-toggle">
+          <button data-type="fixa" class="${newBetType==='fixa'?'active':''}">Opções fixas</button>
+          <button data-type="aberta" class="${newBetType==='aberta'?'active':''}">Palpite livre</button>
+        </div>
+        <select id="betExpiry">
+          ${[['1h','1 hora'],['3h','3 horas'],['6h','6 horas'],['12h','12 horas'],['24h','24 horas'],['3d','3 dias'],['none','sem expiração']].map(([v,l])=>
+            `<option value="${v}" ${newBetExpiry===v?'selected':''}>${l}</option>`).join('')}
+        </select>
+      </div>
+      ${newBetType==='fixa' ? `
+        <div class="row"><input type="text" id="betOptions" placeholder="Opções separadas por vírgula: Sim, Não" /></div>
+        <div class="opts-hint">"Nenhuma das opções" é adicionada sozinha, para quando nada bater. Dá pra acrescentar mais opções depois, enquanto a aposta estiver aberta.</div>
+      ` : `
+        <div class="opts-hint">Cada pessoa escreve seu próprio palpite ao apostar. "Nenhuma das opções" fica disponível para quando ninguém acertar.</div>
+      `}
+      <div class="cost-note">Custa ${fmt(config.betCost)} pontos para abrir uma aposta.</div>
+      <button class="submit-bet" id="createBetBtn">Abrir aposta</button>
+    </div>
+  `;
+}
+
+function expiryToMs(code){
+  const map = { '1h':1, '3h':3, '6h':6, '12h':12, '24h':24, '3d':72 };
+  if(code==='none') return null;
+  return (map[code]||24) * 60*60*1000;
+}
+
+function renderBet(bet, user){
+  const pot = bet.wagers.reduce((s,w)=> s+w.amount, 0);
+  const isHost = bet.creator === me.username;
+  const isOpen = bet.status==='aberta';
+  const canResolve = (isHost || user.isAdmin) && isOpen;
+  const canManage = (isHost || user.isAdmin);
+  const myWagers = bet.wagers.filter(w=> w.user===me.username);
+
+  const optionsWithVoid = [...bet.options];
+  if(!optionsWithVoid.includes('Nenhuma das opções')) optionsWithVoid.push('Nenhuma das opções');
+
+  const poolByOption = {};
+  optionsWithVoid.forEach(o=> poolByOption[o] = 0);
+  bet.wagers.forEach(w=> poolByOption[w.option] = (poolByOption[w.option]||0) + w.amount);
+
+  const rows = optionsWithVoid.map(opt=>{
+    const isVoidOpt = opt==='Nenhuma das opções';
+    const isWinnerRow = bet.status==='fechada' && bet.winner===opt;
+    const poolTxt = poolByOption[opt] ? `${fmt(poolByOption[opt])} pts` : '—';
+    if(!isOpen){
+      return `<div class="option-row ${isWinnerRow?'winner':''}">
+        <div class="oname ${isVoidOpt?'void':''}">${escapeHTML(opt)}</div>
+        <div class="opool mono">${poolTxt}</div>
+      </div>`;
+    }
+    return `<div class="option-row">
+      <div class="oname ${isVoidOpt?'void':''}">${escapeHTML(opt)}</div>
+      <div class="opool mono">${poolTxt}</div>
+      <input type="number" min="1" placeholder="pts" class="wagerAmt" data-bet="${bet.id}" data-opt="${escapeAttr(opt)}" />
+      <button class="wager-btn" data-bet="${bet.id}" data-opt="${escapeAttr(opt)}">Apostar</button>
+    </div>`;
+  }).join('');
+
+  const addOptionRow = (isOpen && bet.type==='fixa') ? `
+    <div class="add-option-row">
+      <input type="text" maxlength="40" placeholder="Adicionar outra opção" id="newOpt_${bet.id}" />
+      <button data-add-opt="${bet.id}">+ opção</button>
+    </div>` : '';
+
+  const openInput = (isOpen && bet.type==='aberta') ? `
+    <div class="open-input-row">
+      <input type="text" id="openGuess_${bet.id}" placeholder="Seu palpite" />
+      <input type="number" min="1" style="width:80px;" id="openAmt_${bet.id}" placeholder="pts" />
+      <button class="wager-btn" data-open-bet="${bet.id}">Apostar</button>
+    </div>` : '';
+
+  const resolveControls = canManage ? `
+    <div class="host-controls">
+      <div class="host-label">${isOpen ? (isHost ? 'Você é o anfitrião — escolha o resultado certo' : 'Controle de host (admin)') : ''}</div>
+      ${canResolve ? `
+        <select id="resolveSel_${bet.id}">
+          ${optionsWithVoid.map(o=> `<option value="${escapeAttr(o)}">${escapeHTML(o)}</option>`).join('')}
+        </select>
+        <button class="resolve" data-resolve-bet="${bet.id}">Encerrar e pagar</button>
+        <button class="void-bet" data-void-bet="${bet.id}">Cancelar (reembolsar)</button>
+      ` : ''}
+      ${!isOpen ? `<button class="delete-bet" data-delete-bet="${bet.id}">Excluir postagem</button>` : ''}
+    </div>` : '';
+
+  const resultNote = bet.status==='fechada' ? `
+    <div class="result-note">${bet.winner==='Nenhuma das opções' ? 'A casa levou o pote — ninguém apostou na resposta certa.' : `"${escapeHTML(bet.winner)}" venceu. Pote dividido entre quem apostou nela.`}</div>
+  ` : bet.status==='expirada' ? `
+    <div class="result-note">Aposta expirou sem ser encerrada — pontos devolvidos a todos.</div>
+  ` : '';
+
+  const expTxt = bet.expiresAt ? fmtDate(bet.expiresAt) : 'sem expiração';
+  const expSoon = bet.expiresAt && isOpen && (bet.expiresAt - now) < 60*60*1000;
+
+  return `
+    <div class="bet ${bet.status==='fechada'?'closed':''} ${bet.status==='expirada'?'expirada':''}">
+      <div class="bet-top">
+        <div>
+          <div class="bet-title">${escapeHTML(bet.title)}</div>
+          <div class="bet-meta">
+            <span>criada por ${nameHTML(bet.creator)}</span>
+            <span>${bet.type==='fixa' ? 'opções fixas' : 'palpite livre'}</span>
+            <span class="exp ${expSoon?'soon':''}">expira: ${expTxt}</span>
+          </div>
+        </div>
+        <div class="status-tag ${bet.status}">${bet.status==='aberta' ? 'aberta' : bet.status==='expirada' ? 'expirada' : 'encerrada'}</div>
+      </div>
+      <div class="pot-line">Pote total: <span class="mono">${fmt(pot)} pts</span></div>
+      ${rows}
+      ${addOptionRow}
+      ${openInput}
+      ${myWagers.length ? `<div class="my-wagers">Você apostou: ${myWagers.map(w=>`<b>${fmt(w.amount)}</b> em "${escapeHTML(w.option)}"`).join(', ')}</div>` : ''}
+      ${resolveControls}
+      ${resultNote}
+    </div>
+  `;
+}
+
+async function refreshAndSave(mutator){
+  await loadState();
+  processExpiredBets();
+  mutator();
+  await saveState();
+  render();
+}
+
+function bindApp(){
+  document.getElementById('toggleNewBet').onclick = ()=>{ newBetOpen = !newBetOpen; render(); };
+
+  document.querySelectorAll('.type-toggle button').forEach(b=>{
+    b.onclick = ()=>{ newBetType = b.dataset.type; render(); };
+  });
+  const expirySel = document.getElementById('betExpiry');
+  if(expirySel) expirySel.onchange = ()=>{ newBetExpiry = expirySel.value; };
+
+  const createBtn = document.getElementById('createBetBtn');
+  if(createBtn) createBtn.onclick = async ()=>{
+    const title = document.getElementById('betTitle').value.trim();
+    if(!title){ toast('Dê um título para a aposta'); return; }
+    let options = [];
+    if(newBetType==='fixa'){
+      const raw = document.getElementById('betOptions').value.trim();
+      options = raw.split(',').map(s=>s.trim()).filter(Boolean);
+      if(options.length < 1){ toast('Adicione ao menos uma opção'); return; }
+    }
+    await loadState();
+    const cost = config.betCost || 0;
+    const u = state.users[me.key];
+    if(u.balance < cost){ toast(`Você precisa de ${fmt(cost)} pontos para abrir uma aposta`); return; }
+    processExpiredBets();
+    u.balance -= cost;
+    const ms = expiryToMs(newBetExpiry);
+    state.bets.push({
+      id: uid('b_'), title, type:newBetType, options, creator: me.username,
+      status:'aberta', wagers:[], winner:null, cost,
+      createdAt: Date.now(), expiresAt: ms ? Date.now()+ms : null
+    });
+    await saveState();
+    newBetOpen = false;
+    toast('Aposta aberta na mesa');
+    render();
+  };
+
+  document.querySelectorAll('[data-add-opt]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const betId = btn.dataset.addOpt;
+      const input = document.getElementById('newOpt_'+betId);
+      const val = input.value.trim();
+      if(!val){ toast('Escreva a nova opção'); return; }
+      await refreshAndSave(()=>{
+        const bet = state.bets.find(b=> b.id===betId);
+        if(bet && bet.status==='aberta' && !bet.options.includes(val)) bet.options.push(val);
+      });
+      toast('Opção adicionada');
+    };
+  });
+
+  document.querySelectorAll('.wager-btn[data-bet]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const betId = btn.dataset.bet, opt = btn.dataset.opt;
+      const input = document.querySelector(`.wagerAmt[data-bet="${betId}"][data-opt="${cssEscape(opt)}"]`);
+      const amt = parseInt(input.value, 10);
+      if(!amt || amt<=0){ toast('Digite um valor válido'); return; }
+      await placeWager(betId, opt, amt);
+    };
+  });
+
+  document.querySelectorAll('[data-open-bet]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const betId = btn.dataset.openBet;
+      const guess = document.getElementById('openGuess_'+betId).value.trim();
+      const amt = parseInt(document.getElementById('openAmt_'+betId).value, 10);
+      if(!guess){ toast('Escreva seu palpite'); return; }
+      if(!amt || amt<=0){ toast('Digite um valor válido'); return; }
+      await placeWager(betId, guess, amt, true);
+    };
+  });
+
+  document.querySelectorAll('[data-resolve-bet]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const betId = btn.dataset.resolveBet;
+      const sel = document.getElementById('resolveSel_'+betId);
+      const winner = sel.value;
+      if(!confirm(`Encerrar esta aposta com "${winner}" como resultado certo?`)) return;
+      await resolveBet(betId, winner);
+    };
+  });
+
+  document.querySelectorAll('[data-void-bet]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const betId = btn.dataset.voidBet;
+      if(!confirm('Cancelar aposta e devolver os pontos de todos?')) return;
+      await voidBet(betId);
+    };
+  });
+
+  document.querySelectorAll('[data-delete-bet]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      if(!confirm('Excluir esta postagem da mesa? Isso não pode ser desfeito.')) return;
+      const betId = btn.dataset.deleteBet;
+      await refreshAndSave(()=>{ state.bets = state.bets.filter(b=> b.id!==betId); });
+      toast('Postagem excluída');
+    };
+  });
+
+  document.querySelectorAll('[data-del-msg]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.dataset.delMsg;
+      await refreshAndSave(()=>{ state.chat = (state.chat||[]).filter(m=> m.id!==id); });
+    };
+  });
+
+  const bonusBtn = document.getElementById('bonusBtn');
+  if(bonusBtn) bonusBtn.onclick = async ()=>{
+    await refreshAndSave(()=>{
+      const u = state.users[me.key];
+      const cd = config.freePoints.cooldownMinutes*60*1000;
+      if(now - (u.lastBonus||0) < cd) return;
+      u.balance += config.freePoints.amount;
+      u.lastBonus = Date.now();
+    });
+    toast(`+${config.freePoints.amount} pontos grátis`);
+  };
+
+  const spinBtn = document.getElementById('spinBtn');
+  if(spinBtn) spinBtn.onclick = ()=> runSlot();
+
+  const chatInput = document.getElementById('chatInput');
+  if(chatInput){
+    chatInput.oninput = e=> { chatDraft = e.target.value; };
+    chatInput.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChat(); });
+  }
+  const chatSendBtn = document.getElementById('chatSendBtn');
+  if(chatSendBtn) chatSendBtn.onclick = ()=> sendChat();
+}
+
+async function sendChat(){
+  const text = chatDraft.trim();
+  if(!text) return;
+  chatDraft = '';
+  await refreshAndSave(()=>{
+    if(!state.chat) state.chat = [];
+    state.chat.push({ id: uid('m_'), user: me.username, text, ts: Date.now(), house: !!state.users[me.key].isAdmin });
+    if(state.chat.length > 200) state.chat = state.chat.slice(-200);
+  });
+}
+
+async function placeWager(betId, option, amount, isOpenGuess=false){
+  await loadState();
+  processExpiredBets();
+  const bet = state.bets.find(b=> b.id===betId);
+  const u = state.users[me.key];
+  if(!bet || bet.status!=='aberta'){ toast('Essa aposta já foi encerrada'); render(); return; }
+  if(amount > u.balance){ toast('Você não tem pontos suficientes'); return; }
+  u.balance -= amount;
+  if(isOpenGuess){
+    const existing = bet.options.find(o=> o.toLowerCase()===option.toLowerCase());
+    const finalOpt = existing || option;
+    if(!existing) bet.options.push(option);
+    bet.wagers.push({ user: me.username, option: finalOpt, amount, ts: Date.now() });
+  } else {
+    bet.wagers.push({ user: me.username, option, amount, ts: Date.now() });
+  }
+  await saveState();
+  toast(`Apostou ${fmt(amount)} pontos`);
+  render();
+}
+
+async function resolveBet(betId, winner){
+  await loadState();
+  processExpiredBets();
+  const bet = state.bets.find(b=> b.id===betId);
+  if(!bet || bet.status!=='aberta') { render(); return; }
+  bet.status = 'fechada';
+  const pot = bet.wagers.reduce((s,w)=> s+w.amount, 0);
+  const winningWagers = bet.wagers.filter(w=> w.option===winner);
+  const winPool = winningWagers.reduce((s,w)=> s+w.amount, 0);
+  if(winPool > 0){
+    winningWagers.forEach(w=>{
+      const u = state.users[String(w.user).toLowerCase()];
+      if(u){ const share = w.amount / winPool; u.balance += w.amount + share * (pot - winPool); }
+    });
+    bet.winner = winner;
+  } else {
+    bet.winner = 'Nenhuma das opções';
+  }
+  await saveState();
+  toast('Aposta encerrada e paga');
+  render();
+}
+
+async function voidBet(betId){
+  await loadState();
+  const bet = state.bets.find(b=> b.id===betId);
+  if(!bet) return;
+  bet.wagers.forEach(w=>{
+    const u = state.users[String(w.user).toLowerCase()];
+    if(u) u.balance += w.amount;
+  });
+  state.bets = state.bets.filter(b=> b.id!==betId);
+  await saveState();
+  toast('Aposta cancelada, pontos devolvidos');
+  render();
+}
+
+async function runSlot(){
+  const u = state.users[me.key];
+  const cd = config.slot.cooldownSeconds*1000;
+  if(now - (u.lastSpin||0) < cd || spinning) return;
+  spinning = true;
+  render();
+  const reels = document.querySelectorAll('#slotReels .reel');
+  reels.forEach(r=> r.classList.add('spin'));
+  const spinTicks = setInterval(()=>{
+    reels.forEach(r=> r.textContent = SYMBOLS[Math.floor(Math.random()*SYMBOLS.length)]);
+  }, 90);
+
+  await new Promise(res=> setTimeout(res, 1100));
+  clearInterval(spinTicks);
+  reels.forEach(r=> r.classList.remove('spin'));
+
+  const final = [rand(SYMBOLS), rand(SYMBOLS), rand(SYMBOLS)];
+  reels.forEach((r,i)=> r.textContent = final[i]);
+
+  const payouts = config.slot.payouts;
+  let win = 0;
+  if(final[0]===final[1] && final[1]===final[2]){
+    win = final[0]==='7️⃣' ? payouts.triple7 : payouts.tripleOutro;
+  } else if(final[0]===final[1] || final[1]===final[2] || final[0]===final[2]){
+    win = payouts.par;
+  } else {
+    win = payouts.nada;
+  }
+
+  document.getElementById('slotResult').textContent = win>=payouts.tripleOutro ? `JACKPOT! +${win} pontos` : `+${win} pontos`;
+
+  await refreshAndSave(()=>{
+    const uu = state.users[me.key];
+    uu.balance += win;
+    uu.lastSpin = Date.now();
+  });
+  spinning = false;
+  render();
+  toast(win>=payouts.tripleOutro ? `Jackpot! +${win} pontos` : `+${win} pontos no caça-níquel`);
+}
+
+async function boot(){
+  await loadConfig();
+  loadSession();
+  await loadState();
+  if(sessionStillValid()){
+    const changed = processExpiredBets();
+    if(changed) await saveState();
+  }
+  render();
+  setInterval(async ()=>{
+    now = Date.now();
+    const active = document.activeElement;
+    const isTyping = active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName);
+    if(isTyping || newBetOpen) return;
+    await loadConfig();
+    await loadState();
+    if(sessionStillValid() && processExpiredBets()) await saveState();
+    render();
+  }, 2500);
+}
+boot();
+</script>
 </body>
 </html>

@@ -1,95 +1,97 @@
-O SALAO — casa de apostas entre amigos
-======================================
+SALAO DE APOSTAS
+================
 
-Como rodar
-----------
-1. Tenha Python 3 (nao precisa instalar mais nada).
-2. Coloque TODOS os arquivos desta pasta juntos e rode:
+Como rodar:
+1. Tenha Python 3 instalado (nao precisa instalar nada mais).
+2. Nesta pasta, execute:
        python3 server.py
-3. O terminal mostra dois enderecos:
+3. O terminal vai mostrar dois enderecos:
    - http://localhost:8000            -> so neste computador
-   - http://SEU_IP_NA_REDE:8000       -> para o pessoal na mesma rede
+   - http://SEU_IP_NA_REDE:8000       -> para outras pessoas na mesma
+                                          rede Wi-Fi/LAN abrirem no
+                                          navegador delas
 
-Outra porta:  PORT=5050 python3 server.py
+Para outra porta:
+       PORT=5050 python3 server.py
 
-Se ninguem mais acessar: confirme que estao no mesmo Wi-Fi e libere a
-porta 8000 no firewall (Windows pergunta na primeira vez; no Linux com
-ufw: sudo ufw allow 8000).
+Se ninguem mais conseguir acessar:
+- Confirme que todos estao na MESMA rede (mesmo Wi-Fi/roteador).
+- O firewall do seu sistema pode estar bloqueando a porta 8000:
+  - Windows: se aparecer um aviso pedindo permissao para o Python na
+    rede, escolha "Permitir" (redes privadas).
+  - Mac: Preferencias do Sistema > Rede > Firewall > permitir Python.
+  - Linux: se usar ufw, rode "sudo ufw allow 8000".
 
-Arquivos
---------
-server.py            -> servidor (so biblioteca padrao)
-login.html           -> entrar / criar conta
-index.html           -> Mesa (apostas)
-loja.html            -> Loja
-perfil.html          -> Perfil (visual, senha, sair)
-admin.html           -> Painel da casa
-app.js / style.css   -> codigo e visual, compartilhados pelas paginas
-
-casino_state.json    -> o jogo (contas, apostas, chat, loja)
-casino_config.json   -> AS REGRAS, em arquivo separado (ver abaixo)
-casino_auth.json     -> senhas e sessoes; nunca vai para o navegador
-
-PRIMEIRO PASSO: crie a conta da casa
-------------------------------------
-A conta que manda se chama "Casa" (veja adminUser no
-casino_config.json). Crie essa conta antes de todo mundo e guarde a
-senha - quem entrar com ela vira o host.
-
-A conta da casa:
-- fica FORA do ranking
-- aparece no chat com nome dourado brilhante e o selo CASA
-- e a unica que abre admin.html e muda as regras
-
-Para usar outro nome de host, edite "adminUser" no
-casino_config.json e reinicie o servidor.
-
-casino_config.json — as regras
-------------------------------
-Da para editar pelo painel da casa ou direto no arquivo (reinicie o
-servidor se editar com o jogo parado):
-
-  startBalance       saldo de quem cria conta
-  betCost            custo para abrir uma aposta (padrao 20)
-  defaultExpireMin   prazo sugerido nas apostas novas
-  bonusAmount        quanto vale o "pontos gratis"
-  bonusCooldownMin   de quantos em quantos minutos pode pegar
-  spinCooldownSec    intervalo entre giros do caca-niquel
-  slot.seteTriplo    premio de tres 7
-  slot.trio          premio de qualquer trinca
-  slot.par           premio de um par
-  slot.nada          consolacao quando nao sai nada
-  betsLocked / chatOn / shopOn / announcement
-
-Apostas
--------
-- Abrir custa betCost pontos (padrao 20), descontado de quem abre.
-- Toda aposta mostra QUEM abriu, quando foi criada e o PRAZO.
-  Passou do prazo, ninguem mais aposta; o dono (ou a casa) so precisa
-  escolher o resultado e pagar.
-- Opcoes fixas: o dono da aposta e a casa podem ACRESCENTAR opcoes
-  depois, enquanto ela estiver aberta.
-- Excluir postagem: quem abriu a aposta e a casa podem excluir - os
-  pontos apostados voltam para todo mundo. No chat, cada um apaga as
-  proprias mensagens (o X ao lado da hora) e a casa apaga qualquer uma.
-
-Loja
-----
-Cinco tipos de item, todos criados pela casa: cor do nome (solida ou
-degrade), tag, brasao (emoji OU imagem que voce envia), moldura e
-efeito no chat. A imagem do brasao vira 96px e fica guardada dentro do
-jogo, entao funciona sem internet.
-
-O botao "Carregar pacote inicial" cria 29 itens prontos. Cada item tem
-preco, liga/desliga e a opcao "so a casa entrega", util para premio.
-
-Contas e senhas
+CONTAS E SENHAS
 ---------------
-Cada um cria a propria conta com senha, guardada com sha256 + sal em
-casino_auth.json - esse arquivo nunca vai para o navegador. Trocar a
-senha fica em Perfil; a casa pode definir senha nova para qualquer
-jogador no painel.
+- Agora todo mundo cria uma conta com nome + senha (aba "Criar conta"
+  na tela inicial). Login fica salvo no navegador de cada pessoa.
+- A conta do host (admin) ja vem pronta:
+       usuario: Casa
+       senha:   vip777
+  Essa conta fica FORA do ranking (nao aparece no placar) e o nome
+  dela aparece com um efeito dourado brilhante no chat.
+  TROQUE ESSA SENHA assim que possivel: entre como "Casa" e va em
+  Perfil > Trocar senha.
 
-Isso segura o basico entre amigos, mas nao e sistema bancario: quem
-estiver logado consegue mandar o estado do jogo para o servidor. Jogue
-com gente conhecida.
+PAGINAS
+-------
+- index.html  -> Mesa: apostas, chat, pontos gratis e caca-niquel
+- loja.html   -> Loja: cores de nome, tags, brasoes e fotos de perfil
+- perfil.html -> Perfil: itens comprados, trocar avatar, trocar senha
+- painel.html -> Painel do host (so aparece/funciona para a conta admin)
+
+O QUE O HOST PODE FAZER (painel.html)
+--------------------------------------
+- Dar pontos ilimitados ou zerar o saldo de qualquer jogador
+- Definir o saldo inicial dos novos jogadores
+- Enviar anuncios no chat como "A Casa"
+- Banir/desbanir jogadores pelo nome
+- Limpar o chat inteiro / cancelar todas as apostas abertas
+- Adicionar ou remover itens da loja (cores, tags, brasoes e fotos
+  de perfil), escolhendo emoji para os que usam icone
+- Ajustar as REGRAS DO CASSINO (ficam num arquivo separado,
+  casino_config.json):
+    - custo em pontos para abrir uma aposta (padrao: 20)
+    - valor e intervalo dos pontos gratis
+    - tempo de espera do caca-niquel e o quanto cada resultado paga
+      (tres 7, tres iguais, duas iguais, nada)
+
+APOSTAS
+-------
+- Custam pontos para abrir (valor definido pelo host).
+- Mostram quem criou e a data/hora de expiracao (o criador escolhe
+  o prazo ao abrir: de 1 hora ate sem expiracao).
+- Se a aposta expirar sem ser encerrada, os pontos apostados sao
+  devolvidos automaticamente a todos.
+- Apostas de "opcoes fixas" podem ganhar novas opcoes depois de
+  abertas, enquanto ainda estiverem abertas.
+- O criador da aposta (ou o host) pode excluir uma aposta ja
+  encerrada/expirada da mesa (botao "Excluir postagem").
+- Mensagens do chat tambem podem ser excluidas: cada um apaga as
+  suas, e o host pode apagar qualquer uma.
+
+FOTO DE PERFIL
+--------------
+Como o servidor e so um script local (sem upload de imagens), a
+"foto de perfil" e um icone/emoji comprado na loja (aba "Foto de
+perfil") e equipado em Perfil. Aparece no chat, no ranking e no
+cabecalho.
+
+ARQUIVOS
+--------
+- server.py           -> servidor (so biblioteca padrao do Python,
+                          detecta e mostra o IP da rede automaticamente)
+- app.js               -> logica compartilhada por todas as paginas
+                          (login, estado, loja, formatacao)
+- styles.css           -> visual (tema cassino oxblood + latao)
+- index.html, loja.html, perfil.html, painel.html -> as 4 paginas
+- casino_state.json     -> dados salvos (contas, senhas com hash,
+                            apostas, chat, banidos, loja). Ja vem com
+                            a conta "Casa", uma aposta de exemplo e a
+                            loja com itens prontos. Pode apagar para
+                            zerar tudo (menos a conta Casa, que e
+                            recriada se o arquivo nao existir).
+- casino_config.json    -> as regras ajustaveis do cassino (custo de
+                            aposta, pontos gratis, caca-niquel).
+                            Editavel pelo painel do host, ou na mao.

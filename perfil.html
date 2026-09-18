@@ -3,22 +3,115 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Perfil · O Salão</title>
+<title>O Salão — Perfil</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header class="topbar" id="topbar"></header>
-<div class="announce" id="announce"></div>
-<div class="ribbon" id="ribbon"></div>
-<div class="wrap">
-  <main id="page"></main>
-  <aside class="rail" id="rail"></aside>
-</div>
-<div class="toast" id="toast"></div>
+<div id="app"></div>
+<div id="toast"></div>
 <script src="app.js"></script>
-<script>Salao.init('perfil');</script>
+<script>
+let pwError = '';
+let pwOk = '';
+
+function render(){
+  const app = document.getElementById('app');
+  loadSession();
+  if(!sessionStillValid()){
+    clearSession();
+    app.innerHTML = navHTML('perfil.html') + `
+      <div class="guard-msg"><h2>Você precisa entrar</h2><p>Volte para a mesa e crie sua conta ou faça login.</p>
+      <p><a href="index.html">Ir para a Mesa</a></p></div>`;
+    bindNav();
+    return;
+  }
+  app.innerHTML = navHTML('perfil.html') + renderProfile();
+  bindProfile();
+}
+
+const CATS = [
+  ['avatars','Foto de perfil'],
+  ['colors','Cores de nome'],
+  ['tags','Tags'],
+  ['crests','Brasões']
+];
+
+function renderProfile(){
+  const user = state.users[me.key];
+  const eqFieldFor = { colors:'color', tags:'tag', crests:'crest', avatars:'avatar' };
+
+  const blocks = CATS.map(([cat,label])=>{
+    const owned = user.owned[cat] || [];
+    const eqField = eqFieldFor[cat];
+    const equippedId = user.equipped[eqField];
+    const shopItems = state.shop[cat] || [];
+    const ownedItems = shopItems.filter(it=> owned.includes(it.id));
+    const pillHTML = ownedItems.length ? ownedItems.map(it=>{
+      const isEq = equippedId===it.id;
+      const label2 = cat==='colors' ? `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${it.hex};margin-right:4px;"></span>${escapeHTML(it.label)}` : cat==='crests'||cat==='avatars' ? `${it.emoji} ${escapeHTML(it.label)}` : escapeHTML(it.label);
+      return `<div class="owned-pill ${isEq?'equipped':''}">${label2} <button data-equip="${cat}" data-id="${escapeAttr(it.id)}">${isEq?'tirar':'usar'}</button></div>`;
+    }).join('') : `<span style="color:var(--muted);font-size:12.5px;">Nada comprado ainda — <a href="loja.html">visite a loja</a>.</span>`;
+    return `
+      <div class="card side-card">
+        <h3>${label}</h3>
+        <div class="owned-grid">${pillHTML}</div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="profile-head">
+      <div class="profile-avatar">${avatarEmoji(user.username)}</div>
+      <div>
+        <h1 class="display">${nameHTML(user.username)}</h1>
+        <div class="tagline">${fmt(user.balance)} pontos ${user.isAdmin ? '· conta da casa (fora do ranking)' : '· na mesa desde '+fmtDate(user.createdAt||Date.now())}</div>
+      </div>
+    </div>
+    <div class="profile-grid">
+      <div>${blocks}</div>
+      <div>
+        <div class="card side-card">
+          <h3>Trocar senha</h3>
+          <div class="form-row"><input type="password" id="curPw" placeholder="Senha atual" /></div>
+          <div class="form-row"><input type="password" id="newPw" placeholder="Nova senha" /></div>
+          <div class="gate-error">${pwError ? escapeHTML(pwError) : (pwOk ? '' : '')}</div>
+          ${pwOk ? `<div style="color:var(--good);font-size:12.5px;margin-bottom:8px;">${escapeHTML(pwOk)}</div>` : ''}
+          <button class="submit-bet" id="changePwBtn">Salvar nova senha</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function bindProfile(){
+  document.querySelectorAll('[data-equip]').forEach(b=>{
+    b.onclick = async ()=>{ await equipItem(b.dataset.equip, b.dataset.id); render(); };
+  });
+  const btn = document.getElementById('changePwBtn');
+  if(btn) btn.onclick = async ()=>{
+    const cur = document.getElementById('curPw').value;
+    const nw = document.getElementById('newPw').value;
+    try{
+      const res = await changePassword(cur, nw);
+      if(!res.ok){ pwError = res.error; pwOk=''; render(); return; }
+      pwError=''; pwOk='Senha atualizada.';
+      render();
+    }catch(err){
+      console.error(err);
+      pwError = 'Algo deu errado ao trocar a senha. Veja o console do navegador.';
+      pwOk=''; render();
+    }
+  };
+}
+
+async function boot(){
+  loadSession();
+  await loadState();
+  render();
+}
+boot();
+</script>
 </body>
 </html>
