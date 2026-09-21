@@ -26,8 +26,13 @@ LOCK = threading.Lock()
 
 DEFAULT_STATE = {
     "users": {}, "bets": [], "chat": [], "banned": [],
-    "settings": {"startBalance": 500},
-    "shop": {"colors": [], "tags": [], "crests": [], "avatars": []}
+    "settings": {
+        "startBalance": 500,
+        "closed": {"loja": False, "apostas": False, "cacaniquel": False, "cavalos": False}
+    },
+    "shop": {"colors": [], "tags": [], "crests": [], "avatars": [], "backgrounds": []},
+    "announcements": [],
+    "events": []
 }
 
 DEFAULT_CONFIG = {

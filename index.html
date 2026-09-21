@@ -18,6 +18,7 @@ let gateError = '';
 let newBetOpen = false;
 let newBetType = 'fixa';
 let newBetExpiry = '24h';
+let newBetVoteDeadline = 'none';
 let chatDraft = '';
 let spinning = false;
 let now = Date.now();
@@ -44,6 +45,8 @@ function render(){
   }
   app.innerHTML = renderApp();
   bindApp();
+  bindNav();
+  bindAnnounceBanner(refreshAndSave);
   const log = document.getElementById('chatLog');
   if(log) log.scrollTop = log.scrollHeight;
 }
@@ -98,6 +101,7 @@ function bindGate(){
 
 function renderApp(){
   const user = state.users[me.key];
+  const closed = state.settings.closed || {};
   const sorted = [...state.bets].sort((a,b)=> b.createdAt - a.createdAt);
   const leaderboard = Object.values(state.users)
     .filter(u=> !u.hidden)
@@ -114,20 +118,24 @@ function renderApp(){
   const spinRemain = Math.max(0, spinCooldownMs - (now - (user.lastSpin||0)));
 
   const tHTML = tickerHTML();
+  const bothBetTypesClosed = closed.apostas && closed.cavalos;
 
   return `
     ${navHTML('index.html')}
+    ${announceBannerHTML()}
     <div class="ticker-wrap ${tHTML ? '' : 'empty'}"><div class="ticker">${tHTML}</div></div>
 
     <div class="layout">
       <div>
         <div class="section-head">
           <h2>Mesa de apostas</h2>
-          <button class="new-bet-toggle" id="toggleNewBet">${newBetOpen ? 'Cancelar' : '+ Abrir aposta'}</button>
+          ${bothBetTypesClosed
+            ? `<span class="closed-pill">Apostas fechadas pelo host</span>`
+            : `<button class="new-bet-toggle" id="toggleNewBet">${newBetOpen ? 'Cancelar' : '+ Abrir aposta'}</button>`}
         </div>
-        ${newBetOpen ? renderNewBetForm() : ''}
+        ${newBetOpen && !bothBetTypesClosed ? renderNewBetForm(closed) : ''}
         <div class="bet-list">
-          ${sorted.length ? sorted.map(b=> renderBet(b, user)).join('') : '<div class="empty-state">Nenhuma aposta na mesa ainda. Abra a primeira.</div>'}
+          ${sorted.length ? sorted.map(b=> renderBet(b, user, closed)).join('') : '<div class="empty-state">Nenhuma aposta na mesa ainda. Abra a primeira.</div>'}
         </div>
       </div>
 
@@ -158,13 +166,15 @@ function renderApp(){
           </div>
           <div style="border-top:1px solid var(--line);margin:12px 0;"></div>
           <div style="font-size:12.5px;color:var(--dim);margin-bottom:6px;">Caça-níquel grátis</div>
-          <div class="slot" id="slotReels">
-            <div class="reel">🎲</div><div class="reel">🎲</div><div class="reel">🎲</div>
-          </div>
-          <div class="slot-result" id="slotResult"></div>
-          <button class="bonus-btn ${spinReady?'':'cooldown'}" style="width:100%;margin-top:6px;" id="spinBtn" ${spinReady||spinning ? '':'disabled'}>
-            ${spinning ? 'girando…' : (spinReady ? 'Girar' : fmtClock(spinRemain))}
-          </button>
+          ${closed.cacaniquel ? `<div class="closed-note">Caça-níquel fechado pelo host.</div>` : `
+            <div class="slot" id="slotReels">
+              <div class="reel">🎲</div><div class="reel">🎲</div><div class="reel">🎲</div>
+            </div>
+            <div class="slot-result" id="slotResult"></div>
+            <button class="bonus-btn ${spinReady?'':'cooldown'}" style="width:100%;margin-top:6px;" id="spinBtn" ${spinReady||spinning ? '':'disabled'}>
+              ${spinning ? 'girando…' : (spinReady ? 'Girar' : fmtClock(spinRemain))}
+            </button>
+          `}
         </div>
 
         <div class="card side-card">
@@ -181,7 +191,17 @@ function renderApp(){
   `;
 }
 
-function renderNewBetForm(){
+function renderNewBetForm(closed){
+  const typeButtons = [
+    ['fixa','Opções fixas', closed.apostas],
+    ['aberta','Palpite livre', closed.apostas],
+    ['cavalo','🐎 Corrida de cavalos', closed.cavalos]
+  ];
+  if(closed.apostas && newBetType!=='cavalo') newBetType='cavalo';
+  if(closed.cavalos && newBetType==='cavalo') newBetType='fixa';
+  const expiryOptions = [['1h','1 hora'],['3h','3 horas'],['6h','6 horas'],['12h','12 horas'],['24h','24 horas'],['3d','3 dias'],['none','sem expiração']]
+    .filter(([v])=> newBetType!=='cavalo' || v!=='none');
+
   return `
     <div class="card new-bet-form">
       <div class="row">
@@ -189,20 +209,33 @@ function renderNewBetForm(){
       </div>
       <div class="row">
         <div class="type-toggle">
-          <button data-type="fixa" class="${newBetType==='fixa'?'active':''}">Opções fixas</button>
-          <button data-type="aberta" class="${newBetType==='aberta'?'active':''}">Palpite livre</button>
+          ${typeButtons.map(([v,l,dis])=> `<button data-type="${v}" class="${newBetType===v?'active':''}" ${dis?'disabled title="Fechado pelo host"':''}>${l}</button>`).join('')}
         </div>
         <select id="betExpiry">
-          ${[['1h','1 hora'],['3h','3 horas'],['6h','6 horas'],['12h','12 horas'],['24h','24 horas'],['3d','3 dias'],['none','sem expiração']].map(([v,l])=>
-            `<option value="${v}" ${newBetExpiry===v?'selected':''}>${l}</option>`).join('')}
+          ${expiryOptions.map(([v,l])=> `<option value="${v}" ${newBetExpiry===v?'selected':''}>${l}</option>`).join('')}
         </select>
       </div>
       ${newBetType==='fixa' ? `
         <div class="row"><input type="text" id="betOptions" placeholder="Opções separadas por vírgula: Sim, Não" /></div>
-        <div class="opts-hint">"Nenhuma das opções" é adicionada sozinha, para quando nada bater. Dá pra acrescentar mais opções depois, enquanto a aposta estiver aberta.</div>
-      ` : `
+        <div class="opts-hint">"Nenhuma das opções" é adicionada sozinha, para quando nada bater. As opções ficam travadas assim que a aposta é criada.</div>
+      ` : newBetType==='aberta' ? `
         <div class="opts-hint">Cada pessoa escreve seu próprio palpite ao apostar. "Nenhuma das opções" fica disponível para quando ninguém acertar.</div>
+      ` : `
+        <div class="row"><input type="text" id="betOptions" placeholder="Nomes dos cavalos separados por vírgula (mín. 2): Relâmpago, Fumaça, Trovão" /></div>
+        <div class="opts-hint">No horário escolhido acima a corrida "acontece" sozinha: um cavalo é sorteado e quem apostou nele divide o pote.</div>
       `}
+      ${newBetType!=='cavalo' ? `
+        <div class="row">
+          <label style="font-size:12px;color:var(--dim);display:flex;align-items:center;gap:8px;">
+            Limite para apostar (opcional)
+            <select id="betVoteDeadline">
+              ${[['none','sem limite (usa a expiração)'],['30m','30 min'],['1h','1 hora'],['3h','3 horas'],['6h','6 horas'],['12h','12 horas'],['24h','24 horas']]
+                .map(([v,l])=> `<option value="${v}" ${newBetVoteDeadline===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+          </label>
+        </div>
+        <div class="opts-hint" style="margin-top:-6px;">Depois desse limite ninguém mais aposta, mas a aposta continua aberta até o anfitrião encerrar.</div>
+      ` : ''}
       <div class="cost-note">Custa ${fmt(config.betCost)} pontos para abrir uma aposta.</div>
       <button class="submit-bet" id="createBetBtn">Abrir aposta</button>
     </div>
@@ -210,56 +243,59 @@ function renderNewBetForm(){
 }
 
 function expiryToMs(code){
-  const map = { '1h':1, '3h':3, '6h':6, '12h':12, '24h':24, '3d':72 };
+  const map = { '30m':0.5, '1h':1, '3h':3, '6h':6, '12h':12, '24h':24, '3d':72 };
   if(code==='none') return null;
   return (map[code]||24) * 60*60*1000;
 }
 
-function renderBet(bet, user){
+function renderBet(bet, user, closed){
   const pot = bet.wagers.reduce((s,w)=> s+w.amount, 0);
   const isHost = bet.creator === me.username;
   const isOpen = bet.status==='aberta';
   const canResolve = (isHost || user.isAdmin) && isOpen;
   const canManage = (isHost || user.isAdmin);
   const myWagers = bet.wagers.filter(w=> w.user===me.username);
+  const isHorse = bet.type==='cavalo';
 
   const optionsWithVoid = [...bet.options];
-  if(!optionsWithVoid.includes('Nenhuma das opções')) optionsWithVoid.push('Nenhuma das opções');
+  if(!isHorse && !optionsWithVoid.includes('Nenhuma das opções')) optionsWithVoid.push('Nenhuma das opções');
 
   const poolByOption = {};
   optionsWithVoid.forEach(o=> poolByOption[o] = 0);
   bet.wagers.forEach(w=> poolByOption[w.option] = (poolByOption[w.option]||0) + w.amount);
 
-  const rows = optionsWithVoid.map(opt=>{
+  const sectionClosedByHost = isHorse ? closed.cavalos : closed.apostas;
+  const votingClosedEarly = !isHorse && bet.voteDeadline && now >= bet.voteDeadline;
+  const canWagerNow = isOpen && !sectionClosedByHost && !votingClosedEarly;
+
+  const rows = optionsWithVoid.map((opt,i)=>{
     const isVoidOpt = opt==='Nenhuma das opções';
     const isWinnerRow = bet.status==='fechada' && bet.winner===opt;
     const poolTxt = poolByOption[opt] ? `${fmt(poolByOption[opt])} pts` : '—';
-    if(!isOpen){
+    const horseIcon = isHorse ? `${HORSE_EMOJIS[i % HORSE_EMOJIS.length]} ` : '';
+    if(!canWagerNow){
       return `<div class="option-row ${isWinnerRow?'winner':''}">
-        <div class="oname ${isVoidOpt?'void':''}">${escapeHTML(opt)}</div>
+        <div class="oname ${isVoidOpt?'void':''}">${horseIcon}${escapeHTML(opt)}</div>
         <div class="opool mono">${poolTxt}</div>
       </div>`;
     }
     return `<div class="option-row">
-      <div class="oname ${isVoidOpt?'void':''}">${escapeHTML(opt)}</div>
+      <div class="oname ${isVoidOpt?'void':''}">${horseIcon}${escapeHTML(opt)}</div>
       <div class="opool mono">${poolTxt}</div>
       <input type="number" min="1" placeholder="pts" class="wagerAmt" data-bet="${bet.id}" data-opt="${escapeAttr(opt)}" />
       <button class="wager-btn" data-bet="${bet.id}" data-opt="${escapeAttr(opt)}">Apostar</button>
     </div>`;
   }).join('');
 
-  const addOptionRow = (isOpen && bet.type==='fixa') ? `
-    <div class="add-option-row">
-      <input type="text" maxlength="40" placeholder="Adicionar outra opção" id="newOpt_${bet.id}" />
-      <button data-add-opt="${bet.id}">+ opção</button>
-    </div>` : '';
-
-  const openInput = (isOpen && bet.type==='aberta') ? `
+  const openInput = (canWagerNow && bet.type==='aberta') ? `
     <div class="open-input-row">
       <input type="text" id="openGuess_${bet.id}" placeholder="Seu palpite" />
       <input type="number" min="1" style="width:80px;" id="openAmt_${bet.id}" placeholder="pts" />
       <button class="wager-btn" data-open-bet="${bet.id}">Apostar</button>
     </div>` : '';
+
+  const votingClosedNote = (isOpen && !canWagerNow && !sectionClosedByHost) ? `<div class="result-note">Tempo para apostar encerrado — aguardando o anfitrião fechar o resultado.</div>` : '';
+  const sectionClosedNote = (isOpen && sectionClosedByHost) ? `<div class="result-note">${isHorse ? 'Corridas de cavalo estão fechadas pelo host.' : 'Apostas estão fechadas pelo host.'}</div>` : '';
 
   const resolveControls = canManage ? `
     <div class="host-controls">
@@ -275,32 +311,36 @@ function renderBet(bet, user){
     </div>` : '';
 
   const resultNote = bet.status==='fechada' ? `
-    <div class="result-note">${bet.winner==='Nenhuma das opções' ? 'A casa levou o pote — ninguém apostou na resposta certa.' : `"${escapeHTML(bet.winner)}" venceu. Pote dividido entre quem apostou nela.`}</div>
+    <div class="result-note">${bet.winner==='Nenhuma das opções' ? 'A casa levou o pote — ninguém apostou na resposta certa.' : `"${escapeHTML(bet.winner)}" venceu. Pote dividido entre quem apostou ${isHorse?'nele':'nela'}.`}</div>
   ` : bet.status==='expirada' ? `
     <div class="result-note">Aposta expirou sem ser encerrada — pontos devolvidos a todos.</div>
   ` : '';
 
   const expTxt = bet.expiresAt ? fmtDate(bet.expiresAt) : 'sem expiração';
   const expSoon = bet.expiresAt && isOpen && (bet.expiresAt - now) < 60*60*1000;
+  const expLabel = isHorse ? 'a corrida acontece às' : 'expira';
+  const voteDeadlineTxt = (!isHorse && bet.voteDeadline) ? `<span class="exp">apostas até: ${fmtDate(bet.voteDeadline)}</span>` : '';
 
   return `
-    <div class="bet ${bet.status==='fechada'?'closed':''} ${bet.status==='expirada'?'expirada':''}">
+    <div class="bet ${bet.status==='fechada'?'closed':''} ${bet.status==='expirada'?'expirada':''} ${isHorse?'cavalo':''}">
       <div class="bet-top">
         <div>
-          <div class="bet-title">${escapeHTML(bet.title)}</div>
+          <div class="bet-title">${isHorse?'🐎 ':''}${escapeHTML(bet.title)}</div>
           <div class="bet-meta">
             <span>criada por ${nameHTML(bet.creator)}</span>
-            <span>${bet.type==='fixa' ? 'opções fixas' : 'palpite livre'}</span>
-            <span class="exp ${expSoon?'soon':''}">expira: ${expTxt}</span>
+            <span>${bet.type==='fixa' ? 'opções fixas' : bet.type==='aberta' ? 'palpite livre' : 'corrida de cavalos'}</span>
+            <span class="exp ${expSoon?'soon':''}">${expLabel}: ${expTxt}</span>
+            ${voteDeadlineTxt}
           </div>
         </div>
         <div class="status-tag ${bet.status}">${bet.status==='aberta' ? 'aberta' : bet.status==='expirada' ? 'expirada' : 'encerrada'}</div>
       </div>
       <div class="pot-line">Pote total: <span class="mono">${fmt(pot)} pts</span></div>
       ${rows}
-      ${addOptionRow}
       ${openInput}
       ${myWagers.length ? `<div class="my-wagers">Você apostou: ${myWagers.map(w=>`<b>${fmt(w.amount)}</b> em "${escapeHTML(w.option)}"`).join(', ')}</div>` : ''}
+      ${votingClosedNote}
+      ${sectionClosedNote}
       ${resolveControls}
       ${resultNote}
     </div>
@@ -316,55 +356,52 @@ async function refreshAndSave(mutator){
 }
 
 function bindApp(){
-  document.getElementById('toggleNewBet').onclick = ()=>{ newBetOpen = !newBetOpen; render(); };
+  const toggleBtn = document.getElementById('toggleNewBet');
+  if(toggleBtn) toggleBtn.onclick = ()=>{ newBetOpen = !newBetOpen; render(); };
 
   document.querySelectorAll('.type-toggle button').forEach(b=>{
-    b.onclick = ()=>{ newBetType = b.dataset.type; render(); };
+    b.onclick = ()=>{ if(b.disabled) return; newBetType = b.dataset.type; render(); };
   });
   const expirySel = document.getElementById('betExpiry');
   if(expirySel) expirySel.onchange = ()=>{ newBetExpiry = expirySel.value; };
+  const voteDeadlineSel = document.getElementById('betVoteDeadline');
+  if(voteDeadlineSel) voteDeadlineSel.onchange = ()=>{ newBetVoteDeadline = voteDeadlineSel.value; };
 
   const createBtn = document.getElementById('createBetBtn');
   if(createBtn) createBtn.onclick = async ()=>{
     const title = document.getElementById('betTitle').value.trim();
     if(!title){ toast('Dê um título para a aposta'); return; }
     let options = [];
-    if(newBetType==='fixa'){
+    if(newBetType==='fixa' || newBetType==='cavalo'){
       const raw = document.getElementById('betOptions').value.trim();
       options = raw.split(',').map(s=>s.trim()).filter(Boolean);
-      if(options.length < 1){ toast('Adicione ao menos uma opção'); return; }
+      const minOpts = newBetType==='cavalo' ? 2 : 1;
+      if(options.length < minOpts){ toast(newBetType==='cavalo' ? 'Adicione pelo menos 2 cavalos' : 'Adicione ao menos uma opção'); return; }
     }
+    if(newBetType==='cavalo' && newBetExpiry==='none'){ toast('Escolha um horário para a corrida acontecer'); return; }
     await loadState();
+    const closed = state.settings.closed || {};
+    if((newBetType==='cavalo' && closed.cavalos) || (newBetType!=='cavalo' && closed.apostas)){
+      toast('Isso está fechado pelo host no momento'); render(); return;
+    }
     const cost = config.betCost || 0;
     const u = state.users[me.key];
     if(u.balance < cost){ toast(`Você precisa de ${fmt(cost)} pontos para abrir uma aposta`); return; }
     processExpiredBets();
     u.balance -= cost;
     const ms = expiryToMs(newBetExpiry);
+    const voteMs = (newBetType!=='cavalo') ? expiryToMs(newBetVoteDeadline) : null;
     state.bets.push({
       id: uid('b_'), title, type:newBetType, options, creator: me.username,
       status:'aberta', wagers:[], winner:null, cost,
-      createdAt: Date.now(), expiresAt: ms ? Date.now()+ms : null
+      createdAt: Date.now(), expiresAt: ms ? Date.now()+ms : null,
+      voteDeadline: voteMs ? Date.now()+voteMs : null
     });
     await saveState();
     newBetOpen = false;
-    toast('Aposta aberta na mesa');
+    toast(newBetType==='cavalo' ? 'Corrida de cavalos aberta na mesa' : 'Aposta aberta na mesa');
     render();
   };
-
-  document.querySelectorAll('[data-add-opt]').forEach(btn=>{
-    btn.onclick = async ()=>{
-      const betId = btn.dataset.addOpt;
-      const input = document.getElementById('newOpt_'+betId);
-      const val = input.value.trim();
-      if(!val){ toast('Escreva a nova opção'); return; }
-      await refreshAndSave(()=>{
-        const bet = state.bets.find(b=> b.id===betId);
-        if(bet && bet.status==='aberta' && !bet.options.includes(val)) bet.options.push(val);
-      });
-      toast('Opção adicionada');
-    };
-  });
 
   document.querySelectorAll('.wager-btn[data-bet]').forEach(btn=>{
     btn.onclick = async ()=>{
@@ -461,7 +498,11 @@ async function placeWager(betId, option, amount, isOpenGuess=false){
   processExpiredBets();
   const bet = state.bets.find(b=> b.id===betId);
   const u = state.users[me.key];
+  const closed = state.settings.closed || {};
   if(!bet || bet.status!=='aberta'){ toast('Essa aposta já foi encerrada'); render(); return; }
+  if(bet.type==='cavalo' && closed.cavalos){ toast('Corridas de cavalo estão fechadas pelo host'); render(); return; }
+  if(bet.type!=='cavalo' && closed.apostas){ toast('Apostas estão fechadas pelo host'); render(); return; }
+  if(bet.type!=='cavalo' && bet.voteDeadline && Date.now() >= bet.voteDeadline){ toast('Tempo para apostar nessa aposta já encerrou'); render(); return; }
   if(amount > u.balance){ toast('Você não tem pontos suficientes'); return; }
   u.balance -= amount;
   if(isOpenGuess){
@@ -516,6 +557,7 @@ async function voidBet(betId){
 
 async function runSlot(){
   const u = state.users[me.key];
+  if(state.settings.closed && state.settings.closed.cacaniquel){ toast('Caça-níquel fechado pelo host'); return; }
   const cd = config.slot.cooldownSeconds*1000;
   if(now - (u.lastSpin||0) < cd || spinning) return;
   spinning = true;

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>O Salão — Eventos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+<script src="app.js"></script>
+<script>
+let newTipo = 'bug';
+
+function render(){
+  const app = document.getElementById('app');
+  loadSession();
+  if(!sessionStillValid()){
+    clearSession();
+    app.innerHTML = navHTML('eventos.html') + `
+      <div class="guard-msg"><h2>Você precisa entrar</h2><p><a href="index.html">Ir para a Mesa</a></p></div>`;
+    bindNav();
+    return;
+  }
+  app.innerHTML = navHTML('eventos.html') + renderEvents();
+  bindEvents();
+  bindNav();
+}
+
+const TIPO_LABEL = { bug:'🐞 Bug', aviso:'⚠️ Aviso', melhoria:'✨ Melhoria', info:'ℹ️ Info' };
+
+function renderEvents(){
+  const user = state.users[me.key];
+  const list = (state.events||[]).slice().sort((a,b)=> b.ts - a.ts);
+
+  const rows = list.length ? list.map(ev=>{
+    const canDelete = user.isAdmin || ev.autor===me.username;
+    return `
+      <div class="bet event-item">
+        <div class="bet-top">
+          <div>
+            <div class="bet-title">${TIPO_LABEL[ev.tipo]||ev.tipo} — ${escapeHTML(ev.title)}</div>
+            <div class="bet-meta">
+              <span>relatado por ${nameHTML(ev.autor)}</span>
+              <span>${fmtDate(ev.ts)}</span>
+            </div>
+          </div>
+          ${canDelete ? `<button class="delete-bet" data-del-event="${ev.id}">Excluir</button>` : ''}
+        </div>
+        ${ev.desc ? `<div class="result-note" style="font-style:normal;">${escapeHTML(ev.desc)}</div>` : ''}
+      </div>
+    `;
+  }).join('') : '<div class="empty-state">Nenhum evento registrado ainda.</div>';
+
+  return `
+    <div class="admin-hero">
+      <h1 class="display">Eventos &amp; Log de bugs</h1>
+      <p>Registre bugs, avisos e melhorias encontradas na mesa. Fica registrado aqui, fora do chat.</p>
+    </div>
+    <div class="card new-bet-form">
+      <div class="row"><input type="text" id="evTitle" placeholder="Título curto do evento" maxlength="80" /></div>
+      <div class="row">
+        <div class="type-toggle">
+          ${Object.entries(TIPO_LABEL).map(([k,l])=> `<button data-tipo="${k}" class="${newTipo===k?'active':''}">${l}</button>`).join('')}
+        </div>
+      </div>
+      <div class="row"><input type="text" id="evDesc" placeholder="Descrição (opcional)" maxlength="300" /></div>
+      <button class="submit-bet" id="addEventBtn">Registrar evento</button>
+    </div>
+    <div class="bet-list">${rows}</div>
+  `;
+}
+
+function bindEvents(){
+  document.querySelectorAll('[data-tipo]').forEach(b=>{
+    b.onclick = ()=>{ newTipo = b.dataset.tipo; render(); };
+  });
+  document.getElementById('addEventBtn').onclick = async ()=>{
+    const title = document.getElementById('evTitle').value.trim();
+    const desc = document.getElementById('evDesc').value.trim();
+    if(!title){ toast('Dê um título ao evento'); return; }
+    await loadState();
+    if(!state.events) state.events = [];
+    state.events.push({ id: uid('ev_'), title, desc, tipo: newTipo, autor: me.username, ts: Date.now() });
+    if(state.events.length > 300) state.events = state.events.slice(-300);
+    await saveState();
+    toast('Evento registrado');
+    render();
+  };
+  document.querySelectorAll('[data-del-event]').forEach(b=>{
+    b.onclick = async ()=>{
+      if(!confirm('Excluir este evento?')) return;
+      const id = b.dataset.delEvent;
+      await loadState();
+      state.events = (state.events||[]).filter(ev=> ev.id!==id);
+      await saveState();
+      render();
+    };
+  });
+}
+
+async function boot(){
+  loadSession();
+  await loadState();
+  render();
+}
+boot();
+</script>
+</body>
+</html>

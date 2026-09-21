@@ -28,26 +28,31 @@ function render(){
   }
   app.innerHTML = navHTML('loja.html') + renderShop();
   bindShop();
+  bindNav();
 }
 
 function renderShop(){
   const user = state.users[me.key];
-  const tabs = [['colors','Cores de nome'],['tags','Tags'],['crests','Brasões'],['avatars','Foto de perfil']];
+  const shopClosed = !!(state.settings.closed && state.settings.closed.loja);
+  const tabs = [['colors','Cores de nome'],['tags','Tags'],['crests','Brasões'],['backgrounds','Fundo de nome'],['avatars','Foto de perfil']];
   const items = state.shop[shopTab] || [];
   const owned = user.owned[shopTab] || [];
-  const eqField = shopTab==='colors' ? 'color' : shopTab==='tags' ? 'tag' : shopTab==='avatars' ? 'avatar' : 'crest';
+  const eqField = shopTab==='colors' ? 'color' : shopTab==='tags' ? 'tag' : shopTab==='avatars' ? 'avatar' : shopTab==='backgrounds' ? 'background' : 'crest';
   const equippedId = user.equipped[eqField];
 
   const rows = items.length ? items.map(it=>{
     const isOwned = owned.includes(it.id);
     const isEquipped = equippedId === it.id;
     const canAfford = user.balance >= it.price;
-    const preview = shopTab === 'colors'
+    const isCustomUpload = it.id === CUSTOM_AVATAR_ID;
+    const preview = (shopTab === 'colors' || shopTab === 'backgrounds')
       ? `<div class="preview" style="background:${it.hex};"></div>`
-      : `<div class="preview emoji">${it.emoji || ''}${!it.emoji ? '' : ''}</div>`;
+      : `<div class="preview emoji">${isCustomUpload ? '📷' : (it.emoji || '')}</div>`;
     const previewFinal = shopTab==='tags' ? `<div class="label-tag">${escapeHTML(it.label)}</div>` : preview;
     let btn;
-    if(isOwned){
+    if(shopClosed && !isOwned){
+      btn = `<button class="ibtn locked" disabled>Loja fechada</button>`;
+    } else if(isOwned){
       btn = `<button class="ibtn ${isEquipped?'equipped':'equip'}" data-equip="${shopTab}" data-id="${escapeAttr(it.id)}">${isEquipped ? 'Equipado' : 'Equipar'}</button>`;
     } else {
       btn = `<button class="ibtn ${canAfford?'buy':'locked'}" data-buy="${shopTab}" data-id="${escapeAttr(it.id)}" ${canAfford?'':'disabled'}>Comprar</button>`;
@@ -57,6 +62,7 @@ function renderShop(){
       <div class="info">
         <div class="iname">${escapeHTML(it.label)}</div>
         <div class="iprice mono">${it.price>0 ? fmt(it.price)+' pts' : 'grátis'}</div>
+        ${isCustomUpload ? `<div class="admin-note" style="margin-top:-2px;">Envie sua própria foto em "Perfil" depois de comprar</div>` : ''}
       </div>
       ${btn}
     </div>`;
@@ -65,7 +71,8 @@ function renderShop(){
   return `
     <div class="shop-hero">
       <h1 class="display">A Loja</h1>
-      <p>Gaste seus pontos em estilo — cores, tags, brasões e uma foto de perfil pra chamar de sua.</p>
+      <p>Gaste seus pontos em estilo — cores, tags, brasões, fundo de nome no chat e uma foto de perfil pra chamar de sua.</p>
+      ${shopClosed ? `<div class="closed-banner">A loja está fechada pelo host. Você ainda pode equipar o que já comprou.</div>` : ''}
     </div>
     <div class="shop-tabs">
       ${tabs.map(([k,label])=> `<button class="shop-tab ${shopTab===k?'active':''}" data-shoptab="${k}">${label}</button>`).join('')}

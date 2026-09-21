@@ -1,16 +1,1 @@
-{
-  "betCost": 20,
-  "freePoints": {
-    "amount": 100,
-    "cooldownMinutes": 3
-  },
-  "slot": {
-    "cooldownSeconds": 45,
-    "payouts": {
-      "triple7": 500,
-      "tripleOutro": 150,
-      "par": 40,
-      "nada": 10
-    }
-  }
-}
+{"betCost": 20, "freePoints": {"amount": 100, "cooldownMinutes": 5}, "slot": {"cooldownSeconds": 45, "payouts": {"triple7": 500, "tripleOutro": 150, "par": 40, "nada": 10}}}

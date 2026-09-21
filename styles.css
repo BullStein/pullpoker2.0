@@ -341,3 +341,33 @@ b.brilhante{
 
 .guard-msg{ max-width:420px; margin:14vh auto; text-align:center; color:var(--dim); }
 .guard-msg h2{ color:var(--cream); }
+
+/* ---------- anúncios da casa (topo da mesa) ---------- */
+.announce-banner{ display:flex; flex-direction:column; gap:6px; margin:16px 0; }
+.announce-item{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  background:linear-gradient(90deg, rgba(201,162,75,.16), rgba(201,162,75,.04));
+  border:1px solid var(--brass-dim); border-left:4px solid var(--brass-bright);
+  border-radius:4px; padding:10px 14px; font-size:13px; color:var(--cream);
+}
+.announce-ico{ font-size:15px; }
+.announce-text{ flex:1; min-width:160px; }
+.announce-time{ font-size:10.5px; color:var(--muted); }
+.announce-del{ background:none; border:none; color:var(--muted); font-size:15px; padding:0 2px; }
+.announce-del:hover{ color:var(--bad); }
+
+/* ---------- fechamentos de seção ---------- */
+.closed-pill{ font-size:11px; color:var(--bad); border:1px solid var(--bad); padding:6px 12px; border-radius:3px; text-transform:uppercase; letter-spacing:.5px; }
+.closed-note{ font-size:12px; color:var(--muted); font-style:italic; padding:10px 0; text-align:center; }
+.closed-banner{ margin-top:10px; font-size:12.5px; color:var(--bad); border:1px dashed var(--bad); border-radius:4px; padding:8px 12px; display:inline-block; }
+
+/* ---------- corrida de cavalos ---------- */
+.bet.cavalo::before{ background:linear-gradient(90deg, var(--brass), var(--brass-bright)); }
+.bet.cavalo .bet-title{ color:var(--brass-bright); }
+
+/* ---------- upload de avatar (perfil) ---------- */
+.upload-row{ margin-top:14px; padding-top:12px; border-top:1px dashed var(--line); }
+.upload-row input[type=file]{ font-size:12px; color:var(--dim); }
+
+/* ---------- eventos / log de bugs ---------- */
+.event-item{ padding-bottom:14px; }

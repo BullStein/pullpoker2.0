@@ -33,16 +33,25 @@ function render(){
   }
   app.innerHTML = navHTML('painel.html') + renderPanel();
   bindPanel();
+  bindNav();
 }
 
 function renderPanel(){
   const banned = state.banned || [];
-  const shopTabs = [['colors','Cores'],['tags','Tags'],['crests','Brasões'],['avatars','Fotos de perfil']];
+  const closed = state.settings.closed || {};
+  const shopTabs = [['colors','Cores'],['tags','Tags'],['crests','Brasões'],['backgrounds','Fundos de nome'],['avatars','Fotos de perfil']];
+  const closures = [
+    ['loja','Loja'],
+    ['apostas','Apostas (opções fixas / palpite livre)'],
+    ['cacaniquel','Caça-níquel'],
+    ['cavalos','Corridas de cavalo']
+  ];
+  const announcements = (state.announcements||[]).slice().reverse();
 
   return `
     <div class="admin-hero">
       <h1 class="display">Painel do Host</h1>
-      <p>Controle total da mesa — jogadores, chat, loja e as regras do cassino.</p>
+      <p>Controle total da mesa — jogadores, chat, loja, corridas e as regras do cassino.</p>
     </div>
     <div class="admin-grid">
       <div>
@@ -83,19 +92,58 @@ function renderPanel(){
         <div class="card side-card">
           <h3>♥ Chat e mesa</h3>
           <div class="admin-sub">
-            <h4>Anunciar como A Casa</h4>
+            <h4>Anúncio no topo da página (evento / aviso da Casa)</h4>
             <div class="admin-row">
-              <input type="text" id="announceInput" placeholder="mensagem para o chat" />
-              <button id="announceBtn">Enviar</button>
+              <input type="text" id="announceInput" placeholder="mensagem de destaque no topo da Mesa" />
+              <button id="announceBtn">Publicar</button>
+            </div>
+            <div class="banned-list">
+              ${announcements.length ? announcements.map(a=> `<div class="banned-chip">${escapeHTML(a.text)}<button data-del-announce="${a.id}">×</button></div>`).join('') : '<span style="font-size:11.5px;color:var(--muted);">Nenhum anúncio publicado.</span>'}
+            </div>
+            <div class="admin-note">Aparece em destaque no topo da Mesa, separado do chat. Veja também a página <a href="eventos.html">Eventos</a> para o log de bugs/avisos.</div>
+          </div>
+          <div class="admin-sub">
+            <h4>Enviar mensagem ao chat como A Casa</h4>
+            <div class="admin-row">
+              <input type="text" id="chatAnnounceInput" placeholder="mensagem para o chat" />
+              <button id="chatAnnounceBtn">Enviar</button>
             </div>
           </div>
           <div class="admin-sub">
             <h4>Ações rápidas</h4>
             <div class="admin-row">
               <button id="clearChatBtn" style="flex:1;">Limpar chat</button>
-              <button id="cancelAllBetsBtn" style="flex:1;">Cancelar apostas abertas</button>
+              <button id="cancelAllBetsBtn" style="flex:1;">Cancelar apostas normais abertas</button>
             </div>
-            <div class="admin-note">Para excluir uma aposta encerrada específica, use o botão "Excluir postagem" dela na Mesa.</div>
+            <div class="admin-row">
+              <button id="cancelHorsesBtn" style="flex:1;">Cancelar corridas de cavalo abertas</button>
+            </div>
+            <div class="admin-note">"Apostas normais" e "corridas de cavalo" agora são canceladas separadamente — nenhum dos dois botões mexe no outro tipo. Para excluir uma aposta encerrada específica, use o botão "Excluir postagem" dela na Mesa.</div>
+          </div>
+        </div>
+
+        <div class="card side-card">
+          <h3>♤ Fechar seções da mesa</h3>
+          <div class="admin-note" style="margin-bottom:10px;">Fechar uma seção impede apostas/compras/giros novos ali, mas o que já existe continua visível.</div>
+          ${closures.map(([k,label])=> `
+            <div class="admin-row" style="justify-content:space-between;">
+              <span style="font-size:13px;">${label}</span>
+              <button data-toggle-closed="${k}" class="${closed[k]?'':''}" style="background:${closed[k]?'var(--bad)':'var(--good)'};color:#0a0a0a;font-weight:700;">${closed[k] ? 'Fechado — reabrir' : 'Aberto — fechar'}</button>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="card side-card">
+          <h3>♧ Backup de dados</h3>
+          <div class="admin-note" style="margin-bottom:8px;">Baixe um arquivo com todos os usuários, saldos, apostas e loja — ou suba um arquivo salvo antes para restaurar.</div>
+          <div class="admin-row">
+            <button id="exportBtn" style="flex:1;">⬇ Baixar backup completo</button>
+          </div>
+          <div class="admin-row">
+            <label style="flex:1;display:flex;align-items:center;justify-content:center;background:var(--oxblood-bright);color:var(--cream);padding:9px 14px;font-size:12px;font-weight:600;border-radius:3px;cursor:pointer;">
+              ⬆ Importar backup (substitui tudo)
+              <input type="file" id="importFile" accept="application/json" style="display:none;" />
+            </label>
           </div>
         </div>
       </div>
@@ -160,14 +208,14 @@ function renderPanel(){
           <div class="admin-row">
             ${shopTab==='crests'||shopTab==='avatars' ? `<input type="text" id="newItemEmoji" placeholder="emoji" style="width:60px;" value="${escapeAttr(newCrestEmoji)}" maxlength="4" />` : ''}
             <input type="text" id="newItemLabel" placeholder="${shopTab==='tags' ? 'texto da tag' : 'nome do item'}" />
-            ${shopTab==='colors' ? `<input type="color" id="newItemHex" value="#c9a24b" style="width:50px;padding:2px;" />` : ''}
+            ${shopTab==='colors'||shopTab==='backgrounds' ? `<input type="color" id="newItemHex" value="#c9a24b" style="width:50px;padding:2px;" />` : ''}
             <input type="number" id="newItemPrice" placeholder="preço" style="width:80px;" />
             <button id="addShopItemBtn">Adicionar</button>
           </div>
           <div class="shop-manage-list">
-            ${(state.shop[shopTab]||[]).map(it=> `<div class="shop-chip">${(shopTab==='crests'||shopTab==='avatars') ? it.emoji+' ' : ''}${escapeHTML(it.label)}<button data-remove-item="${shopTab}" data-remove-id="${escapeAttr(it.id)}">×</button></div>`).join('') || '<span style="font-size:11.5px;color:var(--muted);">Vazio.</span>'}
+            ${(state.shop[shopTab]||[]).map(it=> `<div class="shop-chip">${(shopTab==='crests'||shopTab==='avatars') ? (it.id===CUSTOM_AVATAR_ID?'📷':it.emoji)+' ' : ''}${escapeHTML(it.label)}<button data-remove-item="${shopTab}" data-remove-id="${escapeAttr(it.id)}">×</button></div>`).join('') || '<span style="font-size:11.5px;color:var(--muted);">Vazio.</span>'}
           </div>
-          <div class="admin-note">Itens removidos daqui deixam de aparecer na loja (quem já comprou mantém o que tinha).</div>
+          <div class="admin-note">Itens removidos daqui deixam de aparecer na loja (quem já comprou mantém o que tinha). ${shopTab==='avatars' ? 'Cuidado: o item "📷 Foto customizada" é o que libera o upload de foto no Perfil.' : ''}</div>
         </div>
       </div>
     </div>
@@ -210,11 +258,28 @@ function bindPanel(){
     const text = input.value.trim();
     if(!text){ toast('Escreva uma mensagem'); return; }
     await refreshAndSave(()=>{
+      if(!state.announcements) state.announcements = [];
+      state.announcements.push({ id: uid('an_'), text, ts: Date.now(), host: me.username });
+      if(state.announcements.length > 30) state.announcements = state.announcements.slice(-30);
+    });
+    toast('Anúncio publicado no topo da mesa');
+  };
+  document.querySelectorAll('[data-del-announce]').forEach(b=>{
+    b.onclick = async ()=>{
+      const id = b.dataset.delAnnounce;
+      await refreshAndSave(()=>{ state.announcements = (state.announcements||[]).filter(a=> a.id!==id); });
+    };
+  });
+  document.getElementById('chatAnnounceBtn').onclick = async ()=>{
+    const input = document.getElementById('chatAnnounceInput');
+    const text = input.value.trim();
+    if(!text){ toast('Escreva uma mensagem'); return; }
+    await refreshAndSave(()=>{
       if(!state.chat) state.chat = [];
       state.chat.push({ id: uid('m_'), user: me.username, text, ts: Date.now(), house: true });
       if(state.chat.length > 200) state.chat = state.chat.slice(-200);
     });
-    toast('Anúncio enviado ao chat');
+    toast('Mensagem enviada ao chat');
   };
   document.getElementById('banBtn').onclick = async ()=>{
     const name = document.getElementById('banName').value.trim();
@@ -238,13 +303,64 @@ function bindPanel(){
     toast('Chat limpo');
   };
   document.getElementById('cancelAllBetsBtn').onclick = async ()=>{
-    if(!confirm('Cancelar TODAS as apostas abertas e devolver os pontos apostados?')) return;
+    if(!confirm('Cancelar TODAS as apostas normais abertas (opções fixas / palpite livre) e devolver os pontos apostados? Corridas de cavalo abertas NÃO são afetadas por este botão.')) return;
     await refreshAndSave(()=>{
-      const open = state.bets.filter(b=> b.status==='aberta');
-      open.forEach(b=>{ b.wagers.forEach(w=>{ const u=state.users[String(w.user).toLowerCase()]; if(u) u.balance += w.amount; }); });
-      state.bets = state.bets.filter(b=> b.status!=='aberta');
+      const isTargetOpen = b=> b.status==='aberta' && b.type!=='cavalo';
+      state.bets.filter(isTargetOpen).forEach(b=>{ b.wagers.forEach(w=>{ const u=state.users[String(w.user).toLowerCase()]; if(u) u.balance += w.amount; }); });
+      state.bets = state.bets.filter(b=> !isTargetOpen(b));
     });
-    toast('Apostas abertas canceladas, pontos devolvidos');
+    toast('Apostas normais abertas canceladas, pontos devolvidos');
+  };
+  const cancelHorsesBtn = document.getElementById('cancelHorsesBtn');
+  if(cancelHorsesBtn) cancelHorsesBtn.onclick = async ()=>{
+    if(!confirm('Cancelar TODAS as corridas de cavalo abertas e devolver os pontos apostados?')) return;
+    await refreshAndSave(()=>{
+      const isTargetOpen = b=> b.status==='aberta' && b.type==='cavalo';
+      state.bets.filter(isTargetOpen).forEach(b=>{ b.wagers.forEach(w=>{ const u=state.users[String(w.user).toLowerCase()]; if(u) u.balance += w.amount; }); });
+      state.bets = state.bets.filter(b=> !isTargetOpen(b));
+    });
+    toast('Corridas de cavalo abertas canceladas, pontos devolvidos');
+  };
+
+  document.querySelectorAll('[data-toggle-closed]').forEach(b=>{
+    b.onclick = async ()=>{
+      const k = b.dataset.toggleClosed;
+      await refreshAndSave(()=>{
+        if(!state.settings.closed) state.settings.closed = {};
+        state.settings.closed[k] = !state.settings.closed[k];
+      });
+      toast(state.settings.closed[k] ? 'Seção fechada' : 'Seção reaberta');
+    };
+  });
+
+  document.getElementById('exportBtn').onclick = ()=>{
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type:'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `salao_backup_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    toast('Backup baixado');
+  };
+  document.getElementById('importFile').onchange = async (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    if(!confirm('Isso vai SUBSTITUIR todos os dados atuais (usuários, saldos, apostas, chat, loja) pelo arquivo escolhido. Essa ação não pode ser desfeita. Continuar?')){ e.target.value=''; return; }
+    try{
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if(!data || typeof data !== 'object' || !data.users || !data.bets){ toast('Arquivo inválido — não parece um backup do Salão'); return; }
+      state = data;
+      await loadState();
+      await saveState();
+      toast('Backup importado com sucesso');
+      render();
+    }catch(err){
+      console.error(err);
+      toast('Não consegui ler esse arquivo');
+    }finally{
+      e.target.value = '';
+    }
   };
 
   document.getElementById('saveConfigBtn').onclick = async ()=>{
@@ -282,7 +398,7 @@ function bindPanel(){
     if(!label){ toast('Dê um nome ao item'); return; }
     if(isNaN(price) || price<0){ toast('Preço inválido'); return; }
     const newItem = { id: uid('custom_'), label, price };
-    if(shopTab==='colors'){
+    if(shopTab==='colors' || shopTab==='backgrounds'){
       const hexEl = document.getElementById('newItemHex');
       newItem.hex = hexEl ? hexEl.value : '#c9a24b';
     }

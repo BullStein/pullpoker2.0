@@ -1,21 +1,24 @@
 // ============================================================
 // O SALÃO — núcleo compartilhado (auth, estado, config, helpers)
-// Incluído por index.html, loja.html, perfil.html e painel.html
+// Incluído por index.html, loja.html, perfil.html, painel.html e eventos.html
 // ============================================================
 
 const SESSION_KEY = 'salao_session'; // { username: 'nomeDigitado' }
 const START_BALANCE_FALLBACK = 500;
 
-const DEFAULT_SHOP = { colors: [], tags: [], crests: [], avatars: [] };
+const DEFAULT_SHOP = { colors: [], tags: [], crests: [], avatars: [], backgrounds: [] };
 const DEFAULT_CONFIG = {
   betCost: 20,
   freePoints: { amount: 100, cooldownMinutes: 3 },
   slot: { cooldownSeconds: 45, payouts: { triple7: 500, tripleOutro: 150, par: 40, nada: 10 } }
 };
+const DEFAULT_CLOSED = { loja:false, apostas:false, cacaniquel:false, cavalos:false };
 const SYMBOLS = ['🍒','🔔','⭐','7️⃣','🍋','💎'];
 const CREST_SUGGESTIONS = ['👑','💎','🔥','☠️','🐉','🦈','⚡','🃏','♠️','🎲','💰','🍀','🎯','🥇','🐺','🦁','🂡','🎰','🍒','👻','🤖','😈','👽','🤡'];
+const HORSE_EMOJIS = ['🐎','🐴','🦄','🐆','🦓','🐕','🐇','🐪'];
+const CUSTOM_AVATAR_ID = 'a_custom_upload';
 
-let state = { users:{}, bets:[], chat:[], banned:[], settings:{startBalance:500}, shop:null };
+let state = { users:{}, bets:[], chat:[], banned:[], settings:{startBalance:500, closed: {...DEFAULT_CLOSED}}, shop:null, announcements:[], events:[] };
 let config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
 let me = null; // { key, username } — key = lowercase, username = como foi cadastrado
 let serverUnreachable = false; // true se /api/state falhou (servidor fora do ar / arquivo aberto direto sem python3 server.py)
@@ -110,10 +113,20 @@ async function loadState(){
   if(!state.chat) state.chat = [];
   if(!state.banned) state.banned = [];
   if(!state.settings) state.settings = { startBalance: START_BALANCE_FALLBACK };
+  if(!state.settings.closed) state.settings.closed = { ...DEFAULT_CLOSED };
+  ['loja','apostas','cacaniquel','cavalos'].forEach(k=>{ if(typeof state.settings.closed[k] !== 'boolean') state.settings.closed[k]=false; });
   if(!state.shop) state.shop = JSON.parse(JSON.stringify(DEFAULT_SHOP));
-  ['colors','tags','crests','avatars'].forEach(k=>{ if(!state.shop[k]) state.shop[k]=[]; });
+  ['colors','tags','crests','avatars','backgrounds'].forEach(k=>{ if(!state.shop[k]) state.shop[k]=[]; });
   if(!state.bets) state.bets = [];
   if(!state.users) state.users = {};
+  if(!state.announcements) state.announcements = [];
+  if(!state.events) state.events = [];
+  Object.values(state.users).forEach(u=>{
+    if(!u.owned) u.owned = { colors:[], tags:[], crests:[], avatars:[], backgrounds:[] };
+    if(!u.owned.backgrounds) u.owned.backgrounds = [];
+    if(!u.equipped) u.equipped = { color:null, tag:null, crest:null, avatar:null, background:null };
+    if(u.equipped.background === undefined) u.equipped.background = null;
+  });
 }
 async function saveState(){
   try{
@@ -167,8 +180,9 @@ function newUserRecord(username, passwordHash){
     createdAt: Date.now(),
     lastBonus: 0,
     lastSpin: 0,
-    owned: { colors:[], tags:[], crests:[], avatars:[] },
-    equipped: { color:null, tag:null, crest:null, avatar:null }
+    customAvatarData: null,
+    owned: { colors:[], tags:[], crests:[], avatars:[], backgrounds:[] },
+    equipped: { color:null, tag:null, crest:null, avatar:null, background:null }
   };
 }
 
@@ -233,7 +247,11 @@ function nameHTML(username){
   const color = eq.color && (state.shop.colors||[]).find(c=> c.id===eq.color);
   const tag = eq.tag && (state.shop.tags||[]).find(t=> t.id===eq.tag);
   const crest = eq.crest && (state.shop.crests||[]).find(k=> k.id===eq.crest);
-  const nameStyle = color ? ` style="color:${color.hex};"` : '';
+  const bg = eq.background && (state.shop.backgrounds||[]).find(c=> c.id===eq.background);
+  const styleParts = [];
+  if(color) styleParts.push(`color:${color.hex}`);
+  if(bg) styleParts.push(`background:${bg.hex}`, `padding:1px 7px`, `border-radius:3px`);
+  const nameStyle = styleParts.length ? ` style="${styleParts.join(';')};"` : '';
   const crestHtml = crest ? `<span class="crest" title="${escapeAttr(crest.label)}">${crest.emoji}</span>` : '';
   const tagHtml = tag ? `<span class="name-tag">${escapeHTML(tag.label)}</span>` : '';
   const nameSpan = u.isAdmin
@@ -250,8 +268,44 @@ function avatarEmoji(username){
   return av ? av.emoji : (u.isAdmin ? '👑' : '🂠');
 }
 
+// se o usuário comprou e equipou a foto customizada (10k), retorna o dataURL; senão null
+function customAvatarSrc(username){
+  const key = String(username).toLowerCase();
+  const u = state.users[key];
+  if(!u || !u.equipped || u.equipped.avatar !== CUSTOM_AVATAR_ID) return null;
+  return u.customAvatarData || null;
+}
+
 function avatarBadgeHTML(username, size){
-  return `<div class="avatar-badge" style="${size?`width:${size}px;height:${size}px;font-size:${Math.round(size*0.5)}px;`:''}">${avatarEmoji(username)}</div>`;
+  const sizeStyle = size ? `width:${size}px;height:${size}px;font-size:${Math.round(size*0.5)}px;` : '';
+  const custom = customAvatarSrc(username);
+  if(custom){
+    return `<div class="avatar-badge" style="${sizeStyle}padding:0;overflow:hidden;"><img src="${custom}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" /></div>`;
+  }
+  return `<div class="avatar-badge" style="${sizeStyle}">${avatarEmoji(username)}</div>`;
+}
+
+// redimensiona uma imagem para um dataURL JPEG pequeno (perfil.html usa isso pro upload)
+function resizeImageToDataURL(file, maxSize){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onerror = ()=> reject(new Error('Falha ao ler arquivo'));
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onerror = ()=> reject(new Error('Arquivo não é uma imagem válida'));
+      img.onload = ()=>{
+        let { width, height } = img;
+        const scale = Math.min(1, maxSize / Math.max(width, height));
+        width = Math.round(width*scale); height = Math.round(height*scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 // ---------------- nav / hud comum ----------------
@@ -260,7 +314,8 @@ function navHTML(active){
   const pages = [
     ['index.html','Mesa'],
     ['loja.html','Loja'],
-    ['perfil.html','Perfil']
+    ['perfil.html','Perfil'],
+    ['eventos.html','Eventos']
   ];
   if(u && u.isAdmin) pages.push(['painel.html','Painel']);
   const tabs = pages.map(([href,label])=>
@@ -277,7 +332,7 @@ function navHTML(active){
           <div class="who-name">sentado como <b>${nameHTML(u.username)}</b>${u.isAdmin?' · host':''}</div>
         </div>
         <div class="balance-pill"><div class="chip-dot"></div><div class="num mono">${fmt(u.balance)}</div></div>
-        <button class="logout-btn" id="navLogoutBtn">Sair</button>
+        <button class="logout-btn" id="navLogoutBtn" type="button">Sair</button>
       ` : ''}
     </div>
   `;
@@ -287,9 +342,38 @@ function bindNav(){
   if(b) b.onclick = ()=> logout();
 }
 
+// banner de anúncios da Casa — usado no topo da Mesa
+function announceBannerHTML(){
+  const list = (state.announcements||[]).slice(-6).reverse();
+  if(!list.length) return '';
+  const u = meUser();
+  const canDelete = u && u.isAdmin;
+  return `
+    <div class="announce-banner">
+      ${list.map(a=> `
+        <div class="announce-item">
+          <span class="announce-ico">📣</span>
+          <span class="announce-text"><b>${nameHTML(a.host)}</b>: ${escapeHTML(a.text)}</span>
+          <span class="announce-time mono">${fmtDate(a.ts)}</span>
+          ${canDelete ? `<button class="announce-del" data-del-announce="${a.id}" title="excluir">×</button>` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+function bindAnnounceBanner(refreshAndSaveFn){
+  document.querySelectorAll('[data-del-announce]').forEach(b=>{
+    b.onclick = async ()=>{
+      const id = b.dataset.delAnnounce;
+      await refreshAndSaveFn(()=>{ state.announcements = (state.announcements||[]).filter(a=> a.id!==id); });
+    };
+  });
+}
+
 // ---------------- loja: comprar / equipar (compartilhado) ----------------
 async function buyItem(category, id){
   await loadState();
+  if(state.settings.closed && state.settings.closed.loja){ toast('A loja está fechada pelo host no momento'); return false; }
   const item = (state.shop[category]||[]).find(i=> i.id===id);
   const u = state.users[me.key];
   if(!item){ toast('Esse item não existe mais'); return false; }
@@ -304,24 +388,41 @@ async function buyItem(category, id){
 async function equipItem(category, id){
   await loadState();
   const u = state.users[me.key];
-  const field = category==='colors' ? 'color' : category==='tags' ? 'tag' : category==='avatars' ? 'avatar' : 'crest';
+  const field = category==='colors' ? 'color' : category==='tags' ? 'tag' : category==='avatars' ? 'avatar' : category==='backgrounds' ? 'background' : 'crest';
   u.equipped[field] = (u.equipped[field] === id) ? null : id;
   await saveState();
   return true;
 }
 
-// checa apostas expiradas e devolve pontos automaticamente (chamado após loadState)
+// checa apostas expiradas: apostas normais devolvem pontos, corridas de cavalo
+// (bet.type === 'cavalo') se resolvem sozinhas sorteando um vencedor e pagando
+// o pote — chamado após loadState()
 function processExpiredBets(){
   const nowTs = Date.now();
   let changed = false;
   (state.bets||[]).forEach(b=>{
     if(b.status==='aberta' && b.expiresAt && nowTs >= b.expiresAt){
-      b.status = 'expirada';
-      b.winner = null;
-      (b.wagers||[]).forEach(w=>{
-        const u = state.users[String(w.user).toLowerCase()];
-        if(u) u.balance += w.amount;
-      });
+      if(b.type==='cavalo' && b.options && b.options.length){
+        const winner = rand(b.options);
+        b.status = 'fechada';
+        b.winner = winner;
+        const pot = (b.wagers||[]).reduce((s,w)=> s+w.amount, 0);
+        const winningWagers = (b.wagers||[]).filter(w=> w.option===winner);
+        const winPool = winningWagers.reduce((s,w)=> s+w.amount, 0);
+        if(winPool > 0){
+          winningWagers.forEach(w=>{
+            const u = state.users[String(w.user).toLowerCase()];
+            if(u){ const share = w.amount / winPool; u.balance += w.amount + share * (pot - winPool); }
+          });
+        }
+      } else {
+        b.status = 'expirada';
+        b.winner = null;
+        (b.wagers||[]).forEach(w=>{
+          const u = state.users[String(w.user).toLowerCase()];
+          if(u) u.balance += w.amount;
+        });
+      }
       changed = true;
     }
   });
