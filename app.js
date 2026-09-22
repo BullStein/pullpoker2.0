@@ -1,6 +1,6 @@
 // ============================================================
 // O SALÃO — núcleo compartilhado (auth, estado, config, helpers)
-// Incluído por index.html, loja.html, perfil.html, painel.html e eventos.html
+// Incluído por index.html, loja.html, perfil.html e painel.html
 // ============================================================
 
 const SESSION_KEY = 'salao_session'; // { username: 'nomeDigitado' }
@@ -12,13 +12,99 @@ const DEFAULT_CONFIG = {
   freePoints: { amount: 100, cooldownMinutes: 3 },
   slot: { cooldownSeconds: 45, payouts: { triple7: 500, tripleOutro: 150, par: 40, nada: 10 } }
 };
-const DEFAULT_CLOSED = { loja:false, apostas:false, cacaniquel:false, cavalos:false };
 const SYMBOLS = ['🍒','🔔','⭐','7️⃣','🍋','💎'];
-const CREST_SUGGESTIONS = ['👑','💎','🔥','☠️','🐉','🦈','⚡','🃏','♠️','🎲','💰','🍀','🎯','🥇','🐺','🦁','🂡','🎰','🍒','👻','🤖','😈','👽','🤡'];
-const HORSE_EMOJIS = ['🐎','🐴','🦄','🐆','🦓','🐕','🐇','🐪'];
-const CUSTOM_AVATAR_ID = 'a_custom_upload';
+const CREST_SUGGESTIONS = ['👑','💎','🔥','☠️','🐉','🦈','⚡','🃏','♠️','🎲','💰','🍀','🎯','🥇','🐺','🦁','🂡','🎰','🍒','👻','🤖','😈','👽','🤡','🏆','🎭','💍','🔑','⏳','🍾','💣','🧛','🧙','🤠','🥷','🧑‍🚀','🦄','🐲','🦊','🐯','🐼','🐝','🐎'];
 
-let state = { users:{}, bets:[], chat:[], banned:[], settings:{startBalance:500, closed: {...DEFAULT_CLOSED}}, shop:null, announcements:[], events:[] };
+// itens novos adicionados numa atualização — o merge de baixo (seedShopDefaults)
+// injeta esses itens em instalações que já existiam, sem apagar compras feitas.
+const SEED_VERSION = 2;
+const SHOP_SEED = {
+  colors: [
+    { id:'c_crimson', label:'Carmesim', hex:'#d43f3f', price:180 },
+    { id:'c_teal', label:'Turquesa', hex:'#2fb8a6', price:180 },
+    { id:'c_rose', label:'Rosa Choque', hex:'#ef7fb0', price:180 },
+    { id:'c_lime', label:'Verde Limão', hex:'#a8e063', price:180 },
+    { id:'c_ice', label:'Gelo', hex:'#bfe6f5', price:150 },
+    { id:'c_coral', label:'Coral', hex:'#ff8b6b', price:180 },
+    { id:'c_navy', label:'Azul Marinho', hex:'#5c7cb0', price:180 },
+    { id:'c_copper', label:'Cobre', hex:'#c17a4a', price:200 },
+    { id:'c_platinum', label:'Platina', hex:'#e5e4e2', price:300 },
+    { id:'c_ruby', label:'Rubi', hex:'#e0335e', price:250 }
+  ],
+  tags: [
+    { id:'t_vip', label:'VIP', price:500 },
+    { id:'t_novato', label:'Novato', price:50 },
+    { id:'t_azarado', label:'Azarão', price:120 },
+    { id:'t_bluff', label:'Rei do Blefe', price:350 },
+    { id:'t_gerente', label:'Gerente', price:450 },
+    { id:'t_croupier', label:'Crupiê', price:300 },
+    { id:'t_lenda_viva', label:'Lenda Viva', price:700 },
+    { id:'t_investidor', label:'Investidor', price:250 }
+  ],
+  crests: [
+    { id:'k_horse', emoji:'🐎', label:'Cavalo', price:150 },
+    { id:'k_trophy', emoji:'🏆', label:'Troféu', price:220 },
+    { id:'k_target', emoji:'🎯', label:'Alvo', price:130 },
+    { id:'k_clover', emoji:'🍀', label:'Trevo', price:90 },
+    { id:'k_bomb', emoji:'💣', label:'Bomba', price:170 },
+    { id:'k_mask', emoji:'🎭', label:'Máscara', price:160 },
+    { id:'k_ring', emoji:'💍', label:'Anel', price:260 },
+    { id:'k_key', emoji:'🔑', label:'Chave', price:140 },
+    { id:'k_hourglass', emoji:'⏳', label:'Ampulheta', price:130 },
+    { id:'k_champagne', emoji:'🍾', label:'Champanhe', price:200 }
+  ],
+  avatars: [
+    { id:'a_vampire', emoji:'🧛', label:'Vampiro', price:210 },
+    { id:'a_witch', emoji:'🧙', label:'Bruxo(a)', price:210 },
+    { id:'a_cowboy', emoji:'🤠', label:'Caubói', price:180 },
+    { id:'a_ninja', emoji:'🥷', label:'Ninja', price:220 },
+    { id:'a_astronaut', emoji:'🧑‍🚀', label:'Astronauta', price:220 },
+    { id:'a_unicorn', emoji:'🦄', label:'Unicórnio', price:260 },
+    { id:'a_dragonface', emoji:'🐲', label:'Dragãozinho', price:200 },
+    { id:'a_fox', emoji:'🦊', label:'Raposa', price:190 },
+    { id:'a_tiger', emoji:'🐯', label:'Tigre', price:220 },
+    { id:'a_panda', emoji:'🐼', label:'Panda', price:170 },
+    { id:'a_bee', emoji:'🐝', label:'Abelha', price:140 },
+    { id:'custom_photo', label:'Foto personalizada (envie a sua)', price:10000, custom:true }
+  ],
+  backgrounds: [
+    { id:'bg_oxblood', label:'Oxblood', hex:'#6e1522', price:200 },
+    { id:'bg_brass', label:'Latão', hex:'#8a6f1e', price:200 },
+    { id:'bg_emerald', label:'Esmeralda', hex:'#1f6b46', price:220 },
+    { id:'bg_royal', label:'Azul Royal', hex:'#2c3f8f', price:220 },
+    { id:'bg_violet', label:'Violeta', hex:'#5b2d91', price:220 },
+    { id:'bg_charcoal', label:'Chumbo', hex:'#2a2a2a', price:150 },
+    { id:'bg_rose', label:'Rosa Escuro', hex:'#8f2c52', price:200 },
+    { id:'bg_ember', label:'Brasa', hex:'#a4471c', price:200 },
+    { id:'bg_ice', label:'Gelo Escuro', hex:'#2c6b74', price:200 },
+    { id:'bg_gold_shimmer', label:'Dourado Fosco', hex:'#7a5c1e', price:250 }
+  ]
+};
+
+// roster fixo de cavalos usados na Corrida de Cavalos (jogos.html)
+const HORSE_ROSTER = [
+  { id:'h1', name:'Fantasma', emoji:'🐎', color:'#e9cd85' },
+  { id:'h2', name:'Trovão', emoji:'🐎', color:'#c9433f' },
+  { id:'h3', name:'Sombra', emoji:'🐎', color:'#9a9a9a' },
+  { id:'h4', name:'Relâmpago', emoji:'🐎', color:'#4a8fe0' },
+  { id:'h5', name:'Fogo Bravo', emoji:'🐎', color:'#d0602a' },
+  { id:'h6', name:'Rainha', emoji:'🐎', color:'#a34bff' },
+  { id:'h7', name:'Vendaval', emoji:'🐎', color:'#3fbf7f' },
+  { id:'h8', name:'Coringa', emoji:'🐎', color:'#ef7fb0' }
+];
+
+// ---------------- roleta automática (gira sozinha a cada 5 minutos) ----------------
+const ROULETTE_CYCLE_MS = 5*60*1000;
+const ROULETTE_SPIN_MS = 8000;
+const ROULETTE_RESULT_MS = 42000;
+const ROULETTE_BET_MS = ROULETTE_CYCLE_MS - ROULETTE_SPIN_MS - ROULETTE_RESULT_MS;
+const ROULETTE_RED = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+function rouletteColor(n){
+  if(n===0) return 'green';
+  return ROULETTE_RED.has(n) ? 'red' : 'black';
+}
+
+let state = { users:{}, bets:[], chat:[], banned:[], settings:{startBalance:500}, shop:null };
 let config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
 let me = null; // { key, username } — key = lowercase, username = como foi cadastrado
 let serverUnreachable = false; // true se /api/state falhou (servidor fora do ar / arquivo aberto direto sem python3 server.py)
@@ -34,7 +120,20 @@ function fmtDate(ts){ return new Date(ts).toLocaleString('pt-BR',{day:'2-digit',
 function rand(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 function uid(prefix){ return prefix+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 
+// registra uma entrada no log de eventos (eventos.html). Não salva sozinho —
+// quem chama deve estar dentro de um bloco que já vai dar saveState().
+function logEvent(type, text){
+  if(!state.eventLog) state.eventLog = [];
+  state.eventLog.push({ id: uid('ev_'), type, text, ts: Date.now(), by: (me && me.username) || 'sistema' });
+  if(state.eventLog.length > 300) state.eventLog = state.eventLog.slice(-300);
+}
+const EVENT_LABELS = {
+  conta: 'Conta', aposta: 'Aposta', cavalo: 'Corrida', roleta: 'Roleta', loja: 'Loja',
+  chat: 'Chat', admin: 'Admin', config: 'Config', trava: 'Trava', backup: 'Backup'
+};
+
 function toast(msg){
+  if(typeof document === 'undefined') { console.log('[toast]', msg); return; }
   const t = document.getElementById('toast');
   if(!t) return;
   t.textContent = msg;
@@ -104,33 +203,73 @@ function sha256hexPure(str){
 }
 
 // ---------------- estado / config remoto ----------------
+function normalizeUsers(){
+  Object.values(state.users||{}).forEach(u=>{
+    u.owned = u.owned || {};
+    ['colors','tags','crests','avatars','backgrounds'].forEach(c=>{ if(!u.owned[c]) u.owned[c]=[]; });
+    u.equipped = u.equipped || {};
+    ['color','tag','crest','avatar','background'].forEach(f=>{ if(!(f in u.equipped)) u.equipped[f]=null; });
+    if(typeof u.customAvatarData === 'undefined') u.customAvatarData = null;
+  });
+}
+function seedShopDefaults(){
+  if(!state.shop) state.shop = JSON.parse(JSON.stringify(DEFAULT_SHOP));
+  let changed = false;
+  if(typeof state.seedVersion !== 'number') state.seedVersion = 0;
+  if(state.seedVersion < SEED_VERSION){
+    Object.keys(SHOP_SEED).forEach(cat=>{
+      if(!state.shop[cat]) { state.shop[cat] = []; }
+      SHOP_SEED[cat].forEach(item=>{
+        if(!state.shop[cat].some(i=> i.id===item.id)){ state.shop[cat].push(JSON.parse(JSON.stringify(item))); }
+      });
+    });
+    state.seedVersion = SEED_VERSION;
+    changed = true;
+  }
+  return changed;
+}
 async function loadState(){
   try{
     const r = await fetch('/api/state');
     if(r.ok){ state = await r.json(); serverUnreachable = false; }
     else { serverUnreachable = true; }
   }catch(e){ console.error('falha ao buscar estado', e); serverUnreachable = true; }
+  // usuários e banidos ficam num arquivo/endpoint à parte (casino_users.json),
+  // pra dar pra fazer backup/restaurar só as contas. Aqui a gente funde tudo
+  // de volta em `state.users` / `state.banned` — o resto do app nem percebe.
+  try{
+    const ru = await fetch('/api/users');
+    if(ru.ok){
+      const usersPayload = await ru.json();
+      state.users = usersPayload.users || {};
+      state.banned = usersPayload.banned || [];
+    } else if(!state.users){ state.users = {}; state.banned = []; }
+  }catch(e){ console.error('falha ao buscar usuários', e); if(!state.users){ state.users = {}; state.banned = []; } }
   if(!state.chat) state.chat = [];
   if(!state.banned) state.banned = [];
   if(!state.settings) state.settings = { startBalance: START_BALANCE_FALLBACK };
-  if(!state.settings.closed) state.settings.closed = { ...DEFAULT_CLOSED };
-  ['loja','apostas','cacaniquel','cavalos'].forEach(k=>{ if(typeof state.settings.closed[k] !== 'boolean') state.settings.closed[k]=false; });
   if(!state.shop) state.shop = JSON.parse(JSON.stringify(DEFAULT_SHOP));
   ['colors','tags','crests','avatars','backgrounds'].forEach(k=>{ if(!state.shop[k]) state.shop[k]=[]; });
   if(!state.bets) state.bets = [];
   if(!state.users) state.users = {};
   if(!state.announcements) state.announcements = [];
-  if(!state.events) state.events = [];
-  Object.values(state.users).forEach(u=>{
-    if(!u.owned) u.owned = { colors:[], tags:[], crests:[], avatars:[], backgrounds:[] };
-    if(!u.owned.backgrounds) u.owned.backgrounds = [];
-    if(!u.equipped) u.equipped = { color:null, tag:null, crest:null, avatar:null, background:null };
-    if(u.equipped.background === undefined) u.equipped.background = null;
-  });
+  if(!state.horseRace) state.horseRace = { status:'fechada', horses:[], wagers:[], startedAt:null, bettingEndsAt:null, startedAtRun:null, raceEndsAt:null, winnerId:null, potPaid:false };
+  if(!state.roulette) state.roulette = { phase:'apostas', cycleStartedAt: Date.now(), bettingEndsAt: Date.now()+ROULETTE_BET_MS, spinEndsAt:null, wagers:[], resultNumber:null, potPaid:false, history:[] };
+  if(!state.locks) state.locks = { shop:false, bets:false, slot:false, horses:false, roulette:false };
+  if(typeof state.locks.roulette === 'undefined') state.locks.roulette = false;
+  if(!state.eventLog) state.eventLog = [];
+  normalizeUsers();
+  if(!serverUnreachable && seedShopDefaults()) await saveState();
 }
 async function saveState(){
+  // guarda usuários/banidos no endpoint deles, e o resto no /api/state —
+  // por fora, pra quem chama saveState() continua sendo uma coisa só.
+  const { users, banned, ...gameState } = state;
   try{
-    await fetch('/api/state', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(state) });
+    await Promise.all([
+      fetch('/api/users', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ users: users||{}, banned: banned||[] }) }),
+      fetch('/api/state', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(gameState) })
+    ]);
   }catch(e){ console.error('falha ao salvar estado', e); toast('Falha ao salvar — servidor está de pé?'); }
 }
 async function loadConfig(){
@@ -180,9 +319,9 @@ function newUserRecord(username, passwordHash){
     createdAt: Date.now(),
     lastBonus: 0,
     lastSpin: 0,
-    customAvatarData: null,
     owned: { colors:[], tags:[], crests:[], avatars:[], backgrounds:[] },
-    equipped: { color:null, tag:null, crest:null, avatar:null, background:null }
+    equipped: { color:null, tag:null, crest:null, avatar:null, background:null },
+    customAvatarData: null
   };
 }
 
@@ -198,6 +337,7 @@ async function registerAccount(usernameRaw, password){
   if((state.banned||[]).includes(username)) return { ok:false, error:'Esse nome foi banido desta mesa.' };
   const hash = await sha256hex(password);
   state.users[key] = newUserRecord(username, hash);
+  logEvent('conta', `${username} criou uma conta`);
   await saveState();
   me = { key, username };
   saveSession();
@@ -247,60 +387,76 @@ function nameHTML(username){
   const color = eq.color && (state.shop.colors||[]).find(c=> c.id===eq.color);
   const tag = eq.tag && (state.shop.tags||[]).find(t=> t.id===eq.tag);
   const crest = eq.crest && (state.shop.crests||[]).find(k=> k.id===eq.crest);
-  const bg = eq.background && (state.shop.backgrounds||[]).find(c=> c.id===eq.background);
-  const styleParts = [];
-  if(color) styleParts.push(`color:${color.hex}`);
-  if(bg) styleParts.push(`background:${bg.hex}`, `padding:1px 7px`, `border-radius:3px`);
-  const nameStyle = styleParts.length ? ` style="${styleParts.join(';')};"` : '';
+  const bg = eq.background && (state.shop.backgrounds||[]).find(k=> k.id===eq.background);
+  const nameStyle = color ? `color:${color.hex};` : '';
   const crestHtml = crest ? `<span class="crest" title="${escapeAttr(crest.label)}">${crest.emoji}</span>` : '';
   const tagHtml = tag ? `<span class="name-tag">${escapeHTML(tag.label)}</span>` : '';
   const nameSpan = u.isAdmin
-    ? `<b class="brilhante"${nameStyle}>${safeName}</b>`
-    : `<span${nameStyle}>${safeName}</span>`;
-  return `${crestHtml}${nameSpan}${tagHtml}`;
+    ? `<b class="brilhante" style="${nameStyle}">${safeName}</b>`
+    : `<span style="${nameStyle}">${safeName}</span>`;
+  const wrapped = bg ? `<span class="name-bg" style="background:${bg.hex};">${nameSpan}</span>` : nameSpan;
+  return `${crestHtml}${wrapped}${tagHtml}`;
 }
 
-function avatarEmoji(username){
+function avatarContentHTML(username){
   const key = String(username).toLowerCase();
   const u = state.users[key];
   if(!u) return '🂠';
-  const av = u.equipped && u.equipped.avatar && (state.shop.avatars||[]).find(a=> a.id===u.equipped.avatar);
-  return av ? av.emoji : (u.isAdmin ? '👑' : '🂠');
-}
-
-// se o usuário comprou e equipou a foto customizada (10k), retorna o dataURL; senão null
-function customAvatarSrc(username){
-  const key = String(username).toLowerCase();
-  const u = state.users[key];
-  if(!u || !u.equipped || u.equipped.avatar !== CUSTOM_AVATAR_ID) return null;
-  return u.customAvatarData || null;
+  const eq = u.equipped || {};
+  if(eq.avatar === 'custom_photo' && u.customAvatarData){
+    return `<img src="${u.customAvatarData}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`;
+  }
+  const av = eq.avatar && (state.shop.avatars||[]).find(a=> a.id===eq.avatar);
+  return av ? (av.emoji || '🂠') : (u.isAdmin ? '👑' : '🂠');
 }
 
 function avatarBadgeHTML(username, size){
-  const sizeStyle = size ? `width:${size}px;height:${size}px;font-size:${Math.round(size*0.5)}px;` : '';
-  const custom = customAvatarSrc(username);
-  if(custom){
-    return `<div class="avatar-badge" style="${sizeStyle}padding:0;overflow:hidden;"><img src="${custom}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" /></div>`;
-  }
-  return `<div class="avatar-badge" style="${sizeStyle}">${avatarEmoji(username)}</div>`;
+  return `<div class="avatar-badge" style="${size?`width:${size}px;height:${size}px;font-size:${Math.round(size*0.5)}px;`:''}overflow:hidden;">${avatarContentHTML(username)}</div>`;
 }
 
-// redimensiona uma imagem para um dataURL JPEG pequeno (perfil.html usa isso pro upload)
-function resizeImageToDataURL(file, maxSize){
+// só considera "com foto de perfil" quem equipou algum avatar (emoji da loja
+// ou foto personalizada) — usado pra decidir se mostra o avatar ou o nome
+// na lista de quem apostou em cada opção.
+function hasEquippedAvatar(username){
+  const u = state.users[String(username).toLowerCase()];
+  return !!(u && u.equipped && u.equipped.avatar);
+}
+
+// avatar quando a pessoa tem um equipado; senão, o nome em texto —
+// pedido explícito: foto de perfil obrigatória pra aparecer como ícone.
+function voterChipHTML(username, size){
+  size = size || 20;
+  if(hasEquippedAvatar(username)){
+    return `<span class="voter-chip" title="${escapeAttr(username)}">${avatarBadgeHTML(username, size)}</span>`;
+  }
+  return `<span class="voter-name-pill">${nameHTML(username)}</span>`;
+}
+
+// tamanho da fonte do valor do pote crescendo com o valor apostado (escala
+// logarítmica, pra não ficar gigante em potes muito grandes)
+function poolFontSizePx(amount){
+  if(!amount) return 12.5;
+  const size = 12.5 + Math.min(15, Math.log2(amount+1)*1.7);
+  return Math.round(size*10)/10;
+}
+
+// redimensiona uma foto enviada pelo usuário para um quadrado pequeno em base64
+function resizeImageToDataURL(file, size){
+  size = size || 160;
   return new Promise((resolve, reject)=>{
     const reader = new FileReader();
-    reader.onerror = ()=> reject(new Error('Falha ao ler arquivo'));
+    reader.onerror = ()=> reject(new Error('Não consegui ler o arquivo'));
     reader.onload = ()=>{
       const img = new Image();
-      img.onerror = ()=> reject(new Error('Arquivo não é uma imagem válida'));
+      img.onerror = ()=> reject(new Error('Arquivo não parece ser uma imagem válida'));
       img.onload = ()=>{
-        let { width, height } = img;
-        const scale = Math.min(1, maxSize / Math.max(width, height));
-        width = Math.round(width*scale); height = Math.round(height*scale);
         const canvas = document.createElement('canvas');
-        canvas.width = width; canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.82));
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const minSide = Math.min(img.width, img.height);
+        const sx = (img.width - minSide) / 2, sy = (img.height - minSide) / 2;
+        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
       };
       img.src = reader.result;
     };
@@ -313,6 +469,7 @@ function navHTML(active){
   const u = meUser();
   const pages = [
     ['index.html','Mesa'],
+    ['jogos.html','Jogos'],
     ['loja.html','Loja'],
     ['perfil.html','Perfil'],
     ['eventos.html','Eventos']
@@ -332,7 +489,7 @@ function navHTML(active){
           <div class="who-name">sentado como <b>${nameHTML(u.username)}</b>${u.isAdmin?' · host':''}</div>
         </div>
         <div class="balance-pill"><div class="chip-dot"></div><div class="num mono">${fmt(u.balance)}</div></div>
-        <button class="logout-btn" id="navLogoutBtn" type="button">Sair</button>
+        <button class="logout-btn" id="navLogoutBtn">Sair</button>
       ` : ''}
     </div>
   `;
@@ -342,38 +499,10 @@ function bindNav(){
   if(b) b.onclick = ()=> logout();
 }
 
-// banner de anúncios da Casa — usado no topo da Mesa
-function announceBannerHTML(){
-  const list = (state.announcements||[]).slice(-6).reverse();
-  if(!list.length) return '';
-  const u = meUser();
-  const canDelete = u && u.isAdmin;
-  return `
-    <div class="announce-banner">
-      ${list.map(a=> `
-        <div class="announce-item">
-          <span class="announce-ico">📣</span>
-          <span class="announce-text"><b>${nameHTML(a.host)}</b>: ${escapeHTML(a.text)}</span>
-          <span class="announce-time mono">${fmtDate(a.ts)}</span>
-          ${canDelete ? `<button class="announce-del" data-del-announce="${a.id}" title="excluir">×</button>` : ''}
-        </div>
-      `).join('')}
-    </div>
-  `;
-}
-function bindAnnounceBanner(refreshAndSaveFn){
-  document.querySelectorAll('[data-del-announce]').forEach(b=>{
-    b.onclick = async ()=>{
-      const id = b.dataset.delAnnounce;
-      await refreshAndSaveFn(()=>{ state.announcements = (state.announcements||[]).filter(a=> a.id!==id); });
-    };
-  });
-}
-
 // ---------------- loja: comprar / equipar (compartilhado) ----------------
 async function buyItem(category, id){
   await loadState();
-  if(state.settings.closed && state.settings.closed.loja){ toast('A loja está fechada pelo host no momento'); return false; }
+  if(state.locks && state.locks.shop){ toast('Loja fechada pelo host'); return false; }
   const item = (state.shop[category]||[]).find(i=> i.id===id);
   const u = state.users[me.key];
   if(!item){ toast('Esse item não existe mais'); return false; }
@@ -394,37 +523,102 @@ async function equipItem(category, id){
   return true;
 }
 
-// checa apostas expiradas: apostas normais devolvem pontos, corridas de cavalo
-// (bet.type === 'cavalo') se resolvem sozinhas sorteando um vencedor e pagando
-// o pote — chamado após loadState()
+// tranca apostas vencidas (sem devolver pontos — fica travada esperando o
+// host resolver) e chamado após loadState()
 function processExpiredBets(){
   const nowTs = Date.now();
   let changed = false;
   (state.bets||[]).forEach(b=>{
     if(b.status==='aberta' && b.expiresAt && nowTs >= b.expiresAt){
-      if(b.type==='cavalo' && b.options && b.options.length){
-        const winner = rand(b.options);
-        b.status = 'fechada';
-        b.winner = winner;
-        const pot = (b.wagers||[]).reduce((s,w)=> s+w.amount, 0);
-        const winningWagers = (b.wagers||[]).filter(w=> w.option===winner);
-        const winPool = winningWagers.reduce((s,w)=> s+w.amount, 0);
-        if(winPool > 0){
-          winningWagers.forEach(w=>{
-            const u = state.users[String(w.user).toLowerCase()];
-            if(u){ const share = w.amount / winPool; u.balance += w.amount + share * (pot - winPool); }
-          });
-        }
-      } else {
-        b.status = 'expirada';
-        b.winner = null;
-        (b.wagers||[]).forEach(w=>{
-          const u = state.users[String(w.user).toLowerCase()];
-          if(u) u.balance += w.amount;
-        });
-      }
+      b.status = 'travada';
+      logEvent('aposta', `"${b.title}" travou (prazo esgotado) — aguardando o host resolver`);
       changed = true;
     }
   });
+  return changed;
+}
+
+// avança a Corrida de Cavalos (apostas -> correndo -> resultado) e paga o
+// pote. Fica isolada do chat/loop da Mesa — só corre enquanto alguém está
+// na página Jogos. Idempotente via race.potPaid.
+function processHorseRace(){
+  const race = state.horseRace;
+  if(!race || race.status==='fechada' || race.status==='resultado') return false;
+  const nowTs = Date.now();
+  let changed = false;
+  if(race.status==='apostas' && race.bettingEndsAt && nowTs >= race.bettingEndsAt){
+    race.status = 'correndo';
+    const ids = race.horses.map(h=> h.id);
+    race.winnerId = rand(ids);
+    race.startedAtRun = nowTs;
+    race.raceEndsAt = nowTs + 8000;
+    changed = true;
+  }
+  if(race.status==='correndo' && race.raceEndsAt && nowTs >= race.raceEndsAt && !race.potPaid){
+    const pot = (race.wagers||[]).reduce((s,w)=> s+w.amount, 0);
+    const winWagers = (race.wagers||[]).filter(w=> w.horseId===race.winnerId);
+    const winPool = winWagers.reduce((s,w)=> s+w.amount, 0);
+    if(winPool > 0){
+      winWagers.forEach(w=>{
+        const u = state.users[String(w.user).toLowerCase()];
+        if(u){ const share = w.amount / winPool; u.balance += w.amount + share * (pot - winPool); }
+      });
+    }
+    race.status = 'resultado';
+    race.potPaid = true;
+    const winnerHorse = race.horses.find(h=> h.id===race.winnerId);
+    logEvent('cavalo', `Corrida terminou: ${winnerHorse?winnerHorse.name:'?'} venceu, pote de ${pot} pts`);
+    changed = true;
+  }
+  return changed;
+}
+
+// roleta automática: gira sozinha a cada ~5 min (apostas -> girando -> resultado
+// -> nova rodada), sem precisar do host. Chamada em todo poll das páginas.
+function processRoulette(){
+  const rl = state.roulette;
+  if(!rl) return false;
+  const nowTs = Date.now();
+  let changed = false;
+  if(rl.phase==='apostas' && rl.bettingEndsAt && nowTs >= rl.bettingEndsAt){
+    rl.phase = 'girando';
+    rl.resultNumber = Math.floor(Math.random()*37);
+    rl.spinEndsAt = nowTs + ROULETTE_SPIN_MS;
+    changed = true;
+  }
+  if(rl.phase==='girando' && rl.spinEndsAt && nowTs >= rl.spinEndsAt && !rl.potPaid){
+    const num = rl.resultNumber;
+    const color = rouletteColor(num);
+    (rl.wagers||[]).forEach(w=>{
+      let win = false, mult = 0;
+      if(w.betType==='numero' && Number(w.betValue)===num){ win=true; mult=36; }
+      else if(w.betType==='cor' && color!=='green' && w.betValue===color){ win=true; mult=2; }
+      else if(w.betType==='paridade' && num!==0 && ((num%2===0 && w.betValue==='par')||(num%2===1 && w.betValue==='impar'))){ win=true; mult=2; }
+      else if(w.betType==='metade' && num!==0 && ((num<=18 && w.betValue==='baixa')||(num>=19 && w.betValue==='alta'))){ win=true; mult=2; }
+      if(win){
+        const u = state.users[String(w.user).toLowerCase()];
+        if(u) u.balance += w.amount * mult;
+      }
+    });
+    rl.potPaid = true;
+    rl.phase = 'resultado';
+    rl.resultEndsAt = nowTs + ROULETTE_RESULT_MS;
+    rl.lastNumber = num;
+    rl.lastColor = color;
+    if(!rl.history) rl.history = [];
+    rl.history = [{ number:num, color, ts:nowTs }, ...rl.history].slice(0,14);
+    logEvent('roleta', `Roleta parou no ${num} (${color==='green'?'verde':color==='red'?'vermelho':'preto'})`);
+    changed = true;
+  }
+  if(rl.phase==='resultado' && rl.resultEndsAt && nowTs >= rl.resultEndsAt){
+    rl.phase = 'apostas';
+    rl.cycleStartedAt = nowTs;
+    rl.bettingEndsAt = nowTs + ROULETTE_BET_MS;
+    rl.spinEndsAt = null;
+    rl.resultEndsAt = null;
+    rl.wagers = [];
+    rl.potPaid = false;
+    changed = true;
+  }
   return changed;
 }

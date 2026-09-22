@@ -15,6 +15,7 @@
 <script>
 let shopTab = 'colors';
 let newCrestEmoji = '';
+let userFilter = '';
 
 function render(){
   const app = document.getElementById('app');
@@ -36,115 +37,127 @@ function render(){
   bindNav();
 }
 
+function renderUserBox(u){
+  const key = u.username.toLowerCase();
+  const isBanned = (state.banned||[]).includes(u.username);
+  return `
+    <div class="user-box">
+      <div class="user-box-head">
+        ${avatarBadgeHTML(u.username,26)}
+        <div class="user-box-name">${nameHTML(u.username)}${u.isAdmin?' <span class="name-tag">admin</span>':''}${isBanned?' <span class="name-tag" style="color:var(--bad);border-color:var(--bad);">banido</span>':''}
+          <div style="font-size:10.5px;color:var(--muted);">desde ${u.createdAt?fmtDate(u.createdAt):'—'}</div>
+        </div>
+        <div class="user-box-balance mono">${fmt(u.balance)}</div>
+      </div>
+      <div class="admin-row">
+        <input type="number" placeholder="pontos" class="umAmt" data-user="${escapeAttr(key)}" style="width:90px;" />
+        <button data-um-give="${escapeAttr(key)}">Dar</button>
+        <button data-um-take="${escapeAttr(key)}">Tirar</button>
+        <button data-um-reset="${escapeAttr(key)}">Zerar</button>
+      </div>
+      <div class="admin-row">
+        <input type="password" placeholder="nova senha (mín. 4)" class="umPw" data-user="${escapeAttr(key)}" style="flex:1;" />
+        <button data-um-setpw="${escapeAttr(key)}">Definir senha</button>
+      </div>
+      ${!u.isAdmin ? `
+      <div class="admin-row">
+        <button data-um-ban="${escapeAttr(key)}" style="flex:1;${isBanned?'':'background:transparent;border:1px solid var(--bad);color:var(--bad);'}">${isBanned?'Desbanir':'Banir'}</button>
+      </div>` : ''}
+    </div>
+  `;
+}
+
 function renderPanel(){
   const banned = state.banned || [];
-  const closed = state.settings.closed || {};
-  const shopTabs = [['colors','Cores'],['tags','Tags'],['crests','Brasões'],['backgrounds','Fundos de nome'],['avatars','Fotos de perfil']];
-  const closures = [
-    ['loja','Loja'],
-    ['apostas','Apostas (opções fixas / palpite livre)'],
-    ['cacaniquel','Caça-níquel'],
-    ['cavalos','Corridas de cavalo']
-  ];
-  const announcements = (state.announcements||[]).slice().reverse();
+  const locks = state.locks || { shop:false, bets:false, slot:false, horses:false, roulette:false };
+  const allLocked = locks.shop && locks.bets && locks.slot && locks.horses && locks.roulette;
+  const shopTabs = [['colors','Cores'],['tags','Tags'],['crests','Brasões'],['avatars','Fotos de perfil'],['backgrounds','Fundos de nome']];
 
   return `
     <div class="admin-hero">
       <h1 class="display">Painel do Host</h1>
-      <p>Controle total da mesa — jogadores, chat, loja, corridas e as regras do cassino.</p>
+      <p>Controle total da mesa — jogadores, chat, loja e as regras do cassino.</p>
     </div>
     <div class="admin-grid">
       <div>
         <div class="card side-card">
-          <h3>♠ Jogadores</h3>
-          <div class="admin-sub">
-            <h4>Dar / zerar pontos</h4>
-            <div class="admin-row">
-              <input type="text" id="grantName" placeholder="nome do jogador" />
-              <input type="number" id="grantAmt" placeholder="pontos" style="width:90px;" />
-              <button id="grantBtn">Dar pontos</button>
-            </div>
-            <div class="admin-row">
-              <input type="text" id="resetName" placeholder="nome do jogador" />
-              <button id="resetBtn">Zerar saldo</button>
-            </div>
-            <div class="admin-note">Pontos concedidos aqui não saem de ninguém — são criados pela casa.</div>
+          <h3>♠ Saldo inicial de novos jogadores</h3>
+          <div class="admin-row">
+            <input type="number" id="startBalanceInput" value="${state.settings.startBalance}" style="width:100px;" />
+            <button id="setStartBalanceBtn">Salvar</button>
           </div>
-          <div class="admin-sub">
-            <h4>Saldo inicial de novos jogadores</h4>
-            <div class="admin-row">
-              <input type="number" id="startBalanceInput" value="${state.settings.startBalance}" style="width:100px;" />
-              <button id="setStartBalanceBtn">Salvar</button>
-            </div>
+          <div class="admin-note">Não afeta quem já tem conta — só quem se cadastrar dali pra frente.</div>
+        </div>
+
+        <div class="card side-card">
+          <h3>♣ Contas dos jogadores (${Object.keys(state.users||{}).length})</h3>
+          <div class="admin-row">
+            <input type="text" id="userFilterInput" placeholder="buscar por nome…" value="${escapeAttr(userFilter)}" style="flex:1;" />
           </div>
-          <div class="admin-sub">
-            <h4>Banir jogador</h4>
-            <div class="admin-row">
-              <input type="text" id="banName" placeholder="nome do jogador" />
-              <button id="banBtn">Banir</button>
-            </div>
-            <div class="banned-list">
-              ${banned.length ? banned.map(n=> `<div class="banned-chip">${escapeHTML(n)}<button data-unban="${escapeAttr(n)}">×</button></div>`).join('') : '<span style="font-size:11.5px;color:var(--muted);">Ninguém banido.</span>'}
-            </div>
+          <div style="max-height:520px;overflow-y:auto;margin-top:8px;">
+            ${Object.values(state.users||{})
+              .filter(u=> !userFilter || u.username.toLowerCase().includes(userFilter.toLowerCase()))
+              .sort((a,b)=> b.balance-a.balance)
+              .map(u=> renderUserBox(u)).join('') || '<span style="font-size:11.5px;color:var(--muted);">Nenhum usuário encontrado.</span>'}
           </div>
         </div>
 
         <div class="card side-card">
           <h3>♥ Chat e mesa</h3>
           <div class="admin-sub">
-            <h4>Anúncio no topo da página (evento / aviso da Casa)</h4>
+            <h4>Anunciar como A Casa</h4>
             <div class="admin-row">
-              <input type="text" id="announceInput" placeholder="mensagem de destaque no topo da Mesa" />
-              <button id="announceBtn">Publicar</button>
-            </div>
-            <div class="banned-list">
-              ${announcements.length ? announcements.map(a=> `<div class="banned-chip">${escapeHTML(a.text)}<button data-del-announce="${a.id}">×</button></div>`).join('') : '<span style="font-size:11.5px;color:var(--muted);">Nenhum anúncio publicado.</span>'}
-            </div>
-            <div class="admin-note">Aparece em destaque no topo da Mesa, separado do chat. Veja também a página <a href="eventos.html">Eventos</a> para o log de bugs/avisos.</div>
-          </div>
-          <div class="admin-sub">
-            <h4>Enviar mensagem ao chat como A Casa</h4>
-            <div class="admin-row">
-              <input type="text" id="chatAnnounceInput" placeholder="mensagem para o chat" />
-              <button id="chatAnnounceBtn">Enviar</button>
+              <input type="text" id="announceInput" placeholder="mensagem para o chat" />
+              <button id="announceBtn">Enviar</button>
             </div>
           </div>
           <div class="admin-sub">
             <h4>Ações rápidas</h4>
             <div class="admin-row">
               <button id="clearChatBtn" style="flex:1;">Limpar chat</button>
-              <button id="cancelAllBetsBtn" style="flex:1;">Cancelar apostas normais abertas</button>
+              <button id="cancelAllBetsBtn" style="flex:1;">Cancelar apostas abertas</button>
             </div>
-            <div class="admin-row">
-              <button id="cancelHorsesBtn" style="flex:1;">Cancelar corridas de cavalo abertas</button>
-            </div>
-            <div class="admin-note">"Apostas normais" e "corridas de cavalo" agora são canceladas separadamente — nenhum dos dois botões mexe no outro tipo. Para excluir uma aposta encerrada específica, use o botão "Excluir postagem" dela na Mesa.</div>
+            <div class="admin-note">Para excluir uma aposta encerrada específica, use o botão "Excluir postagem" dela na Mesa.</div>
           </div>
         </div>
 
         <div class="card side-card">
-          <h3>♤ Fechar seções da mesa</h3>
-          <div class="admin-note" style="margin-bottom:10px;">Fechar uma seção impede apostas/compras/giros novos ali, mas o que já existe continua visível.</div>
-          ${closures.map(([k,label])=> `
-            <div class="admin-row" style="justify-content:space-between;">
-              <span style="font-size:13px;">${label}</span>
-              <button data-toggle-closed="${k}" class="${closed[k]?'':''}" style="background:${closed[k]?'var(--bad)':'var(--good)'};color:#0a0a0a;font-weight:700;">${closed[k] ? 'Fechado — reabrir' : 'Aberto — fechar'}</button>
-            </div>
-          `).join('')}
+          <h3>♠ Anúncios / eventos no topo da mesa</h3>
+          <div class="admin-row">
+            <input type="text" id="annTitle" placeholder="título (ex: Noite de Pôquer)" />
+          </div>
+          <div class="admin-row">
+            <input type="text" id="annText" placeholder="texto do evento/aviso" />
+          </div>
+          <div class="admin-row">
+            <select id="annDuration">
+              <option value="none">sem expiração</option>
+              <option value="1h">some em 1 hora</option>
+              <option value="3h">some em 3 horas</option>
+              <option value="24h">some em 24 horas</option>
+              <option value="72h">some em 3 dias</option>
+            </select>
+            <button id="addAnnBtn">Publicar cartaz</button>
+          </div>
+          <div class="shop-manage-list">
+            ${(state.announcements||[]).length ? state.announcements.map(a=> `<div class="shop-chip">${escapeHTML(a.title||'Aviso')}<button data-remove-ann="${escapeAttr(a.id)}">×</button></div>`).join('') : '<span style="font-size:11.5px;color:var(--muted);">Nenhum cartaz publicado.</span>'}
+          </div>
         </div>
 
         <div class="card side-card">
-          <h3>♧ Backup de dados</h3>
-          <div class="admin-note" style="margin-bottom:8px;">Baixe um arquivo com todos os usuários, saldos, apostas e loja — ou suba um arquivo salvo antes para restaurar.</div>
+          <h3>🔒 Travas da mesa</h3>
           <div class="admin-row">
-            <button id="exportBtn" style="flex:1;">⬇ Baixar backup completo</button>
+            <button id="lockAllBtn" style="flex:1;">${allLocked ? 'Abrir tudo' : 'Fechar tudo'}</button>
           </div>
-          <div class="admin-row">
-            <label style="flex:1;display:flex;align-items:center;justify-content:center;background:var(--oxblood-bright);color:var(--cream);padding:9px 14px;font-size:12px;font-weight:600;border-radius:3px;cursor:pointer;">
-              ⬆ Importar backup (substitui tudo)
-              <input type="file" id="importFile" accept="application/json" style="display:none;" />
-            </label>
+          <div class="admin-sub">
+            ${[['shop','Loja'],['bets','Apostas'],['slot','Caça-níquel'],['horses','Corrida de cavalos'],['roulette','Roleta']].map(([k,label])=> `
+              <div class="admin-row">
+                <span style="font-size:12.5px;color:var(--dim);flex:1;">${label}</span>
+                <button data-toggle-lock="${k}" style="${locks[k] ? 'background:var(--bad);' : ''}">${locks[k] ? 'Fechado — abrir' : 'Aberto — fechar'}</button>
+              </div>
+            `).join('')}
           </div>
+          <div class="admin-note">Fechar não cancela nada em andamento — só impede coisa nova de começar (novas apostas, giros, compras, corridas).</div>
         </div>
       </div>
 
@@ -213,9 +226,35 @@ function renderPanel(){
             <button id="addShopItemBtn">Adicionar</button>
           </div>
           <div class="shop-manage-list">
-            ${(state.shop[shopTab]||[]).map(it=> `<div class="shop-chip">${(shopTab==='crests'||shopTab==='avatars') ? (it.id===CUSTOM_AVATAR_ID?'📷':it.emoji)+' ' : ''}${escapeHTML(it.label)}<button data-remove-item="${shopTab}" data-remove-id="${escapeAttr(it.id)}">×</button></div>`).join('') || '<span style="font-size:11.5px;color:var(--muted);">Vazio.</span>'}
+            ${(state.shop[shopTab]||[]).map(it=> `<div class="shop-chip">${(shopTab==='crests'||shopTab==='avatars') ? (it.emoji?it.emoji+' ':'📷 ') : (shopTab==='colors'||shopTab==='backgrounds') ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${it.hex};"></span> ` : ''}${escapeHTML(it.label)}<button data-remove-item="${shopTab}" data-remove-id="${escapeAttr(it.id)}">×</button></div>`).join('') || '<span style="font-size:11.5px;color:var(--muted);">Vazio.</span>'}
           </div>
-          <div class="admin-note">Itens removidos daqui deixam de aparecer na loja (quem já comprou mantém o que tinha). ${shopTab==='avatars' ? 'Cuidado: o item "📷 Foto customizada" é o que libera o upload de foto no Perfil.' : ''}</div>
+          <div class="admin-note">Itens removidos daqui deixam de aparecer na loja (quem já comprou mantém o que tinha).</div>
+        </div>
+
+        <div class="card side-card">
+          <h3>💾 Backup e restauração</h3>
+          <div class="admin-row">
+            <button id="downloadBackupBtn" style="flex:1;background:var(--brass-bright);color:#221004;font-weight:700;">Baixar backup completo (contas, jogos, loja)</button>
+          </div>
+          <div class="admin-sub">
+            <h4>Restaurar de um arquivo (completo)</h4>
+            <input type="file" id="restoreFile" accept="application/json" style="margin-bottom:8px;" />
+            <div class="admin-row">
+              <button id="restoreBackupBtn" style="flex:1;background:var(--bad);">Restaurar (substitui tudo)</button>
+            </div>
+            <div class="admin-note">Isso troca contas, saldos, apostas, chat, loja e configs de TODO MUNDO pelo conteúdo do arquivo. Sem volta — baixe um backup antes de restaurar.</div>
+          </div>
+          <div class="admin-sub">
+            <h4>Só as contas (casino_users.json)</h4>
+            <div class="admin-row">
+              <button id="downloadUsersBackupBtn" style="flex:1;">Baixar só usuários</button>
+            </div>
+            <input type="file" id="restoreUsersFile" accept="application/json" style="margin:6px 0 8px;" />
+            <div class="admin-row">
+              <button id="restoreUsersBackupBtn" style="flex:1;background:var(--bad);">Restaurar só usuários</button>
+            </div>
+            <div class="admin-note">Troca só contas/senhas/saldos e banidos — não mexe em apostas, loja ou chat. Bom pra mandar/puxar backup de usuários separado do resto.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -230,23 +269,86 @@ async function refreshAndSave(mutator){
 }
 
 function bindPanel(){
-  document.getElementById('grantBtn').onclick = async ()=>{
-    const name = document.getElementById('grantName').value.trim();
-    const amt = parseInt(document.getElementById('grantAmt').value, 10);
-    if(!name || !amt){ toast('Preencha nome e valor'); return; }
-    const key = name.toLowerCase();
-    if(!state.users[key]){ toast('Jogador não encontrado'); return; }
-    await refreshAndSave(()=>{ state.users[key].balance += amt; });
-    toast(`${fmt(amt)} pontos concedidos a ${name}`);
-  };
-  document.getElementById('resetBtn').onclick = async ()=>{
-    const name = document.getElementById('resetName').value.trim();
-    if(!name){ toast('Preencha o nome'); return; }
-    const key = name.toLowerCase();
-    if(!state.users[key]){ toast('Jogador não encontrado'); return; }
-    await refreshAndSave(()=>{ state.users[key].balance = state.settings.startBalance; });
-    toast(`${name} foi zerado para ${state.settings.startBalance}`);
-  };
+  const filterInput = document.getElementById('userFilterInput');
+  if(filterInput){
+    filterInput.oninput = ()=>{ userFilter = filterInput.value; };
+    filterInput.addEventListener('keydown', e=>{ if(e.key==='Enter') render(); });
+    filterInput.onblur = ()=> render();
+  }
+  document.querySelectorAll('[data-um-give]').forEach(b=>{
+    b.onclick = async ()=>{
+      const key = b.dataset.umGive;
+      const input = document.querySelector(`.umAmt[data-user="${cssEscape(key)}"]`);
+      const amt = parseInt(input.value, 10);
+      if(!amt || amt<=0){ toast('Digite um valor válido'); return; }
+      await refreshAndSave(()=>{
+        if(!state.users[key]) return;
+        state.users[key].balance += amt;
+        logEvent('admin', `${state.users[key].username} recebeu ${amt} pontos do host`);
+      });
+      toast(`${fmt(amt)} pontos concedidos`);
+    };
+  });
+  document.querySelectorAll('[data-um-take]').forEach(b=>{
+    b.onclick = async ()=>{
+      const key = b.dataset.umTake;
+      const input = document.querySelector(`.umAmt[data-user="${cssEscape(key)}"]`);
+      const amt = parseInt(input.value, 10);
+      if(!amt || amt<=0){ toast('Digite um valor válido'); return; }
+      await refreshAndSave(()=>{
+        if(!state.users[key]) return;
+        state.users[key].balance = Math.max(0, state.users[key].balance - amt);
+        logEvent('admin', `${state.users[key].username} perdeu ${amt} pontos (host)`);
+      });
+      toast(`${fmt(amt)} pontos retirados`);
+    };
+  });
+  document.querySelectorAll('[data-um-reset]').forEach(b=>{
+    b.onclick = async ()=>{
+      const key = b.dataset.umReset;
+      await refreshAndSave(()=>{
+        if(!state.users[key]) return;
+        state.users[key].balance = state.settings.startBalance;
+        logEvent('admin', `${state.users[key].username} teve o saldo zerado pelo host`);
+      });
+      toast('Saldo zerado');
+    };
+  });
+  document.querySelectorAll('[data-um-setpw]').forEach(b=>{
+    b.onclick = async ()=>{
+      const key = b.dataset.umSetpw;
+      const input = document.querySelector(`.umPw[data-user="${cssEscape(key)}"]`);
+      const pw = input.value;
+      if(!pw || pw.length<4){ toast('Nova senha precisa ter pelo menos 4 caracteres'); return; }
+      await loadState();
+      if(!state.users[key]){ toast('Jogador não encontrado'); return; }
+      state.users[key].passwordHash = await sha256hex(pw);
+      logEvent('admin', `${state.users[key].username} teve a senha redefinida pelo host`);
+      await saveState();
+      toast(`Senha de ${state.users[key].username} atualizada`);
+      input.value = '';
+      render();
+    };
+  });
+  document.querySelectorAll('[data-um-ban]').forEach(b=>{
+    b.onclick = async ()=>{
+      const key = b.dataset.umBan;
+      await refreshAndSave(()=>{
+        const u = state.users[key];
+        if(!u) return;
+        if(!state.banned) state.banned = [];
+        const already = state.banned.includes(u.username);
+        if(already){
+          state.banned = state.banned.filter(n=> n!==u.username);
+          logEvent('conta', `${u.username} foi desbanido pelo host`);
+        } else {
+          state.banned.push(u.username);
+          logEvent('conta', `${u.username} foi banido da mesa pelo host`);
+        }
+      });
+      toast('Atualizado');
+    };
+  });
   document.getElementById('setStartBalanceBtn').onclick = async ()=>{
     const val = parseInt(document.getElementById('startBalanceInput').value, 10);
     if(isNaN(val) || val<0){ toast('Valor inválido'); return; }
@@ -258,110 +360,48 @@ function bindPanel(){
     const text = input.value.trim();
     if(!text){ toast('Escreva uma mensagem'); return; }
     await refreshAndSave(()=>{
-      if(!state.announcements) state.announcements = [];
-      state.announcements.push({ id: uid('an_'), text, ts: Date.now(), host: me.username });
-      if(state.announcements.length > 30) state.announcements = state.announcements.slice(-30);
-    });
-    toast('Anúncio publicado no topo da mesa');
-  };
-  document.querySelectorAll('[data-del-announce]').forEach(b=>{
-    b.onclick = async ()=>{
-      const id = b.dataset.delAnnounce;
-      await refreshAndSave(()=>{ state.announcements = (state.announcements||[]).filter(a=> a.id!==id); });
-    };
-  });
-  document.getElementById('chatAnnounceBtn').onclick = async ()=>{
-    const input = document.getElementById('chatAnnounceInput');
-    const text = input.value.trim();
-    if(!text){ toast('Escreva uma mensagem'); return; }
-    await refreshAndSave(()=>{
       if(!state.chat) state.chat = [];
       state.chat.push({ id: uid('m_'), user: me.username, text, ts: Date.now(), house: true });
       if(state.chat.length > 200) state.chat = state.chat.slice(-200);
     });
-    toast('Mensagem enviada ao chat');
+    toast('Anúncio enviado ao chat');
   };
-  document.getElementById('banBtn').onclick = async ()=>{
-    const name = document.getElementById('banName').value.trim();
-    if(!name){ toast('Preencha o nome'); return; }
-    await refreshAndSave(()=>{
-      if(!state.banned) state.banned = [];
-      if(!state.banned.includes(name)) state.banned.push(name);
-    });
-    toast(`${name} foi banido da mesa`);
-  };
-  document.querySelectorAll('[data-unban]').forEach(b=>{
-    b.onclick = async ()=>{
-      const name = b.dataset.unban;
-      await refreshAndSave(()=>{ state.banned = (state.banned||[]).filter(n=> n!==name); });
-      toast(`${name} foi desbanido`);
-    };
-  });
   document.getElementById('clearChatBtn').onclick = async ()=>{
     if(!confirm('Limpar todo o histórico do chat?')) return;
-    await refreshAndSave(()=>{ state.chat = []; });
+    await refreshAndSave(()=>{ state.chat = []; logEvent('admin', 'Host limpou o chat'); });
     toast('Chat limpo');
   };
   document.getElementById('cancelAllBetsBtn').onclick = async ()=>{
-    if(!confirm('Cancelar TODAS as apostas normais abertas (opções fixas / palpite livre) e devolver os pontos apostados? Corridas de cavalo abertas NÃO são afetadas por este botão.')) return;
+    if(!confirm('Cancelar TODAS as apostas abertas e devolver os pontos apostados?')) return;
     await refreshAndSave(()=>{
-      const isTargetOpen = b=> b.status==='aberta' && b.type!=='cavalo';
-      state.bets.filter(isTargetOpen).forEach(b=>{ b.wagers.forEach(w=>{ const u=state.users[String(w.user).toLowerCase()]; if(u) u.balance += w.amount; }); });
-      state.bets = state.bets.filter(b=> !isTargetOpen(b));
+      const open = state.bets.filter(b=> b.status==='aberta');
+      open.forEach(b=>{ b.wagers.forEach(w=>{ const u=state.users[String(w.user).toLowerCase()]; if(u) u.balance += w.amount; }); });
+      state.bets = state.bets.filter(b=> b.status!=='aberta');
     });
-    toast('Apostas normais abertas canceladas, pontos devolvidos');
-  };
-  const cancelHorsesBtn = document.getElementById('cancelHorsesBtn');
-  if(cancelHorsesBtn) cancelHorsesBtn.onclick = async ()=>{
-    if(!confirm('Cancelar TODAS as corridas de cavalo abertas e devolver os pontos apostados?')) return;
-    await refreshAndSave(()=>{
-      const isTargetOpen = b=> b.status==='aberta' && b.type==='cavalo';
-      state.bets.filter(isTargetOpen).forEach(b=>{ b.wagers.forEach(w=>{ const u=state.users[String(w.user).toLowerCase()]; if(u) u.balance += w.amount; }); });
-      state.bets = state.bets.filter(b=> !isTargetOpen(b));
-    });
-    toast('Corridas de cavalo abertas canceladas, pontos devolvidos');
+    toast('Apostas abertas canceladas, pontos devolvidos');
   };
 
-  document.querySelectorAll('[data-toggle-closed]').forEach(b=>{
+  document.getElementById('addAnnBtn').onclick = async ()=>{
+    const title = document.getElementById('annTitle').value.trim();
+    const text = document.getElementById('annText').value.trim();
+    const dur = document.getElementById('annDuration').value;
+    if(!text){ toast('Escreva o texto do anúncio'); return; }
+    const map = { '1h':1,'3h':3,'24h':24,'72h':72 };
+    const expiresAt = dur==='none' ? null : Date.now() + map[dur]*60*60*1000;
+    await refreshAndSave(()=>{
+      if(!state.announcements) state.announcements = [];
+      state.announcements.push({ id: uid('ann_'), title, text, createdAt: Date.now(), expiresAt });
+    });
+    document.getElementById('annTitle').value=''; document.getElementById('annText').value='';
+    toast('Cartaz publicado na mesa');
+  };
+  document.querySelectorAll('[data-remove-ann]').forEach(b=>{
     b.onclick = async ()=>{
-      const k = b.dataset.toggleClosed;
-      await refreshAndSave(()=>{
-        if(!state.settings.closed) state.settings.closed = {};
-        state.settings.closed[k] = !state.settings.closed[k];
-      });
-      toast(state.settings.closed[k] ? 'Seção fechada' : 'Seção reaberta');
+      const id = b.dataset.removeAnn;
+      await refreshAndSave(()=>{ state.announcements = (state.announcements||[]).filter(a=> a.id!==id); });
+      toast('Cartaz removido');
     };
   });
-
-  document.getElementById('exportBtn').onclick = ()=>{
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type:'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `salao_backup_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
-    toast('Backup baixado');
-  };
-  document.getElementById('importFile').onchange = async (e)=>{
-    const file = e.target.files[0];
-    if(!file) return;
-    if(!confirm('Isso vai SUBSTITUIR todos os dados atuais (usuários, saldos, apostas, chat, loja) pelo arquivo escolhido. Essa ação não pode ser desfeita. Continuar?')){ e.target.value=''; return; }
-    try{
-      const text = await file.text();
-      const data = JSON.parse(text);
-      if(!data || typeof data !== 'object' || !data.users || !data.bets){ toast('Arquivo inválido — não parece um backup do Salão'); return; }
-      state = data;
-      await loadState();
-      await saveState();
-      toast('Backup importado com sucesso');
-      render();
-    }catch(err){
-      console.error(err);
-      toast('Não consegui ler esse arquivo');
-    }finally{
-      e.target.value = '';
-    }
-  };
 
   document.getElementById('saveConfigBtn').onclick = async ()=>{
     const betCost = parseInt(document.getElementById('cfgBetCost').value,10);
@@ -423,6 +463,104 @@ function bindPanel(){
       toast('Item removido da loja');
     };
   });
+
+  document.querySelectorAll('[data-toggle-lock]').forEach(b=>{
+    b.onclick = async ()=>{
+      const k = b.dataset.toggleLock;
+      const labelMap = { shop:'Loja', bets:'Apostas', slot:'Caça-níquel', horses:'Corrida de cavalos', roulette:'Roleta' };
+      await refreshAndSave(()=>{
+        if(!state.locks) state.locks = { shop:false, bets:false, slot:false, horses:false, roulette:false };
+        state.locks[k] = !state.locks[k];
+        logEvent('trava', `${labelMap[k]} ${state.locks[k] ? 'fechada' : 'aberta'} pelo host`);
+      });
+    };
+  });
+  document.getElementById('lockAllBtn').onclick = async ()=>{
+    await refreshAndSave(()=>{
+      if(!state.locks) state.locks = { shop:false, bets:false, slot:false, horses:false, roulette:false };
+      const allOn = state.locks.shop && state.locks.bets && state.locks.slot && state.locks.horses && state.locks.roulette;
+      const next = !allOn;
+      state.locks = { shop: next, bets: next, slot: next, horses: next, roulette: next };
+      logEvent('trava', next ? 'Host fechou loja, apostas, caça-níquel, corrida e roleta de uma vez' : 'Host reabriu tudo de uma vez');
+    });
+    toast('Travas atualizadas');
+  };
+
+  document.getElementById('downloadBackupBtn').onclick = async ()=>{
+    await loadState();
+    await loadConfig();
+    const payload = { exportedAt: new Date().toISOString(), state, config };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().replace(/[:.]/g,'-');
+    a.href = url; a.download = `salao-backup-${stamp}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    toast('Backup baixado');
+  };
+  document.getElementById('restoreBackupBtn').onclick = async ()=>{
+    const fileInput = document.getElementById('restoreFile');
+    const file = fileInput && fileInput.files && fileInput.files[0];
+    if(!file){ toast('Escolha um arquivo de backup primeiro'); return; }
+    if(!confirm('Isso substitui TODAS as contas, apostas, chat e loja atuais pelo conteúdo do arquivo. Tem certeza?')) return;
+    try{
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const newState = parsed.state || parsed; // aceita backup completo ou só o state cru
+      if(!newState || typeof newState !== 'object' || !newState.users || !newState.bets){
+        toast('Esse arquivo não parece um backup válido'); return;
+      }
+      await loadState();
+      logEvent('backup', `${me.username} restaurou um backup (${file.name})`);
+      newState.eventLog = state.eventLog; // preserva o log local mais recente
+      state = newState;
+      await saveState();
+      if(parsed.config){ config = parsed.config; await saveConfig(); }
+      toast('Backup restaurado');
+      render();
+    }catch(err){
+      console.error(err);
+      toast('Não consegui ler esse arquivo — confira se é um backup exportado daqui');
+    }
+  };
+
+  document.getElementById('downloadUsersBackupBtn').onclick = async ()=>{
+    await loadState();
+    const payload = { exportedAt: new Date().toISOString(), users: state.users, banned: state.banned||[] };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().replace(/[:.]/g,'-');
+    a.href = url; a.download = `salao-usuarios-${stamp}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    toast('Backup de usuários baixado');
+  };
+  document.getElementById('restoreUsersBackupBtn').onclick = async ()=>{
+    const fileInput = document.getElementById('restoreUsersFile');
+    const file = fileInput && fileInput.files && fileInput.files[0];
+    if(!file){ toast('Escolha um arquivo primeiro'); return; }
+    if(!confirm('Isso substitui TODAS as contas, senhas e a lista de banidos pelo conteúdo do arquivo (apostas/loja/chat não mudam). Tem certeza?')) return;
+    try{
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if(!parsed || typeof parsed !== 'object' || !parsed.users){
+        toast('Esse arquivo não parece um backup de usuários válido'); return;
+      }
+      await loadState();
+      logEvent('backup', `${me.username} restaurou um backup de usuários (${file.name})`);
+      state.users = parsed.users;
+      state.banned = parsed.banned || [];
+      normalizeUsers();
+      await saveState();
+      toast('Usuários restaurados');
+      render();
+    }catch(err){
+      console.error(err);
+      toast('Não consegui ler esse arquivo');
+    }
+  };
 }
 
 async function boot(){

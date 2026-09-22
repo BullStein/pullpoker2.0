@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>O Salão — Jogos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+<script src="app.js"></script>
+<script>
+let now = Date.now();
+let raceHorseCount = 6;
+let raceDuration = '45';
+let liveLoopHandle = null;
+const RACE_DURATION_MS = 8000;
+const RACE_HOLD_FRACTION = 0.10; // fração inicial em que os cavalos ficam na largada
+
+function hashStr(s){
+  // FNV-1a — boa dispersão mesmo pra strings quase iguais (h1, h2, h3...),
+  // diferente do hash polinomial simples que dava valores quase idênticos ali.
+  let h = 0x811c9dc5;
+  for(let i=0;i<s.length;i++){
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0);
+}
+// Curva de corrida: todo cavalo avança perto do mesmo ritmo por quase toda a
+// prova (é pra parecer disputado), cada um com um jeito de correr levemente
+// diferente (ritmo/arranco próprios), e só na reta final o vencedor descola.
+function horseProgress(horseId, isWinner, seed, t){
+  const seedNum = hashStr(seed+horseId);
+  const rnd1 = (seedNum % 1000) / 1000;
+  const rnd2 = (Math.floor(seedNum/1000) % 1000) / 1000;
+  const finishTarget = isWinner ? 0.97 : (0.80 + rnd1*0.13); // 0.80–0.93, disputado até o fim
+  const power = 1.5 + rnd2*1.4; // cada cavalo acelera/desacelera num ritmo próprio
+  const phase1 = rnd1 * 6.28, phase2 = rnd2 * 6.28;
+
+  let localT = t <= RACE_HOLD_FRACTION ? 0 : (t - RACE_HOLD_FRACTION) / (1 - RACE_HOLD_FRACTION);
+  localT = Math.max(0, Math.min(1, localT));
+  if(t <= RACE_HOLD_FRACTION){
+    const jitter = 0.015 + Math.abs(Math.sin(t*40 + (seedNum%10))) * 0.015;
+    return jitter;
+  }
+  // até ~80% da prova todos correm quase juntos (leve variação de ritmo);
+  // só na reta final (últimos ~20%) o alvo de cada um realmente separa o pelotão
+  const packShare = Math.min(localT / 0.8, 1);
+  const packPos = (1 - Math.pow(1-localT, 1.6)) * 0.74; // posição "de pelotão", igual pra todos
+  const ownEased = 1 - Math.pow(1-localT, power);
+  const finalPos = ownEased * finishTarget;
+  const blended = packPos*(1-packShare) + finalPos*packShare;
+  const wig = (Math.sin(t*13 + phase1)*0.018 + Math.sin(t*27 + phase2)*0.009) * (1 - localT*0.6);
+  return Math.max(0.01, Math.min(0.97, blended + wig));
+}
+
+function render(){
+  const app = document.getElementById('app');
+  loadSession();
+  if(!sessionStillValid()){
+    clearSession();
+    app.innerHTML = navHTML('jogos.html') + `
+      <div class="guard-msg"><h2>Você precisa entrar</h2><p>Volte para a mesa e crie sua conta ou faça login.</p>
+      <p><a href="index.html">Ir para a Mesa</a></p></div>`;
+    bindNav();
+    return;
+  }
+  app.innerHTML = navHTML('jogos.html') + renderGames();
+  bindGames();
+}
+
+function renderGames(){
+  const user = state.users[me.key];
+  const race = state.horseRace;
+  const rl = state.roulette;
+
+  return `
+    <div class="games-hero">
+      <h1 class="display">Jogos da Casa</h1>
+      <p>Corrida de Cavalos e a Roleta automática — que não para de girar.</p>
+    </div>
+    <div class="card" style="margin-bottom:20px;">
+      <h2 style="margin:0 0 14px;font-size:20px;">🐎 Corrida de Cavalos</h2>
+      ${renderRaceBody(user, race)}
+    </div>
+    <div class="card">
+      <h2 style="margin:0 0 14px;font-size:20px;">🎡 Roleta</h2>
+      ${renderRouletteBody(user, rl)}
+    </div>
+  `;
+}
+
+function renderRaceBody(user, race){
+  if(race.status==='fechada') return renderRaceClosed(user);
+  if(race.status==='apostas') return renderRaceBetting(user, race);
+  if(race.status==='correndo') return renderRaceRunning(race);
+  return renderRaceResult(user, race);
+}
+
+function renderRaceClosed(user){
+  const horsesLocked = state.locks && state.locks.horses;
+  if(horsesLocked){
+    return `<div class="empty-state">Corrida de cavalos fechada pelo host.</div>`;
+  }
+  if(!user.isAdmin){
+    return `<div class="empty-state">Nenhuma corrida rolando agora. Espere o host abrir apostas.</div>`;
+  }
+  return `
+    <div class="empty-state" style="margin-bottom:14px;">Nenhuma corrida rolando. Configure e abra as apostas.</div>
+    <div class="race-controls">
+      <span style="font-size:12px;color:var(--dim);">Cavalos:</span>
+      <select id="raceHorseCount">
+        ${[4,6,8].map(n=> `<option value="${n}" ${raceHorseCount===n?'selected':''}>${n}</option>`).join('')}
+      </select>
+      <span style="font-size:12px;color:var(--dim);">Tempo pra apostar:</span>
+      <select id="raceDuration">
+        ${[['15','15s'],['30','30s'],['45','45s'],['60','1 min'],['120','2 min'],['180','3 min']].map(([v,l])=> `<option value="${v}" ${raceDuration===v?'selected':''}>${l}</option>`).join('')}
+      </select>
+      <button class="new-bet-toggle" id="openRaceBtn">Abrir apostas</button>
+    </div>
+  `;
+}
+
+function renderRaceBetting(user, race){
+  const remain = Math.max(0, (race.bettingEndsAt||0) - now);
+  const closing = remain<=0;
+  const pot = (race.wagers||[]).reduce((s,w)=> s+w.amount,0);
+  const myWagers = (race.wagers||[]).filter(w=> w.user===me.username);
+  const grid = race.horses.map(h=>{
+    const pool = (race.wagers||[]).filter(w=> w.horseId===h.id).reduce((s,w)=> s+w.amount,0);
+    const sharePct = pot>0 ? Math.max(2, (pool/pot)*100) : 0;
+    return `
+      <div class="horse-pick" style="position:relative;overflow:hidden;">
+        ${pool ? `<div class="opt-progress" style="width:${sharePct.toFixed(1)}%;"></div>` : ''}
+        <div style="position:relative;z-index:1;">
+          <div class="hname"><span class="jockey-dot" style="background:${h.color};"></span>${h.emoji} <span style="color:${h.color};font-weight:700;">${escapeHTML(h.name)}</span></div>
+          <div class="hpool mono ${pool?'opool-gold':''}">pote: ${fmt(pool)} pts</div>
+          <div class="hrow">
+            <input type="number" min="1" placeholder="pts" id="hwager_${h.id}" ${closing?'disabled':''} />
+            <button data-horse-bet="${h.id}" ${closing?'disabled':''}>Apostar</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  return `
+    <div class="race-status-bar">
+      <div class="rlabel">${closing ? 'Fechando apostas…' : 'Apostas abertas'} · pote total <span class="mono">${fmt(pot)} pts</span></div>
+      <div class="rcountdown mono" id="raceCountdown">${closing ? '⏳' : fmtClock(remain)}</div>
+    </div>
+    <div class="horse-pick-grid">${grid}</div>
+    ${myWagers.length ? `<div class="my-horse-wagers">Você apostou: ${myWagers.map(w=>{
+      const h = race.horses.find(x=> x.id===w.horseId);
+      return `<b>${fmt(w.amount)}</b> em ${h?escapeHTML(h.name):'?'}`;
+    }).join(', ')}</div>` : ''}
+    ${user.isAdmin ? `
+      <div class="race-controls">
+        <button id="closeRaceBtn">Fechar apostas agora</button>
+        <button id="cancelRaceBtn" style="background:transparent;border:1px solid var(--bad);color:var(--bad);">Cancelar corrida</button>
+      </div>
+    ` : ''}
+  `;
+}
+
+function renderRaceRunning(race){
+  const t = race.startedAtRun ? Math.max(0, Math.min(1, (now - race.startedAtRun) / (race.raceEndsAt - race.startedAtRun))) : 0;
+  const seed = String(race.startedAtRun || race.bettingEndsAt || 0);
+  const phaseLabel = t <= RACE_HOLD_FRACTION ? 'Na largada…' : 'Correndo!';
+  const remainSec = race.raceEndsAt ? Math.max(0, Math.ceil((race.raceEndsAt - now)/1000)) : 0;
+  const lanes = race.horses.map((h,i)=>{
+    const prog = horseProgress(h.id, h.id===race.winnerId, seed, t);
+    return `
+      <div class="lane">
+        <div class="lane-num mono" style="color:${h.color};font-weight:700;">${i+1}</div>
+        <div class="horse-token" id="lane_${h.id}" style="left:${(prog*100).toFixed(1)}%;">
+          <span class="jockey-dot" style="background:${h.color};"></span><span class="horse-emoji">${h.emoji}</span>
+        </div>
+        <div class="finish-line"></div>
+      </div>
+    `;
+  }).join('');
+  return `
+    <div class="race-status-bar">
+      <div class="rlabel" id="racePhaseLabel">🏁 ${phaseLabel}</div>
+      <div class="rcountdown mono" id="raceCountdown">${remainSec}s</div>
+    </div>
+    <div class="race-track">${lanes}</div>
+  `;
+}
+
+function renderRaceResult(user, race){
+  const winner = race.horses.find(h=> h.id===race.winnerId);
+  const pot = (race.wagers||[]).reduce((s,w)=> s+w.amount,0);
+  const winWagers = (race.wagers||[]).filter(w=> w.horseId===race.winnerId);
+  return `
+    <div class="race-result-banner">
+      <div class="rwin">${winner?winner.emoji:''} ${winner?escapeHTML(winner.name):'?'} venceu!</div>
+      <div style="font-size:12.5px;color:var(--dim);margin-top:4px;">Pote de ${fmt(pot)} pts ${winWagers.length ? 'dividido entre quem apostou nele' : '— ninguém apostou no vencedor, a casa levou'}.</div>
+    </div>
+    ${user.isAdmin ? `<div class="race-controls"><button class="new-bet-toggle" id="newRaceBtn">Nova corrida</button></div>` : `<div class="empty-state">Espere o host abrir a próxima corrida.</div>`}
+  `;
+}
+
+// ---------------- Roleta ----------------
+function rouletteColorHex(c){ return c==='green' ? '#2f9e5c' : c==='red' ? '#c9433f' : '#1a1a1a'; }
+function rouletteColorLabel(c){ return c==='green' ? 'verde' : c==='red' ? 'vermelho' : 'preto'; }
+
+function rouletteHistoryHTML(rl){
+  const hist = (rl.history||[]).slice(0,14);
+  if(!hist.length) return '';
+  return `<div style="display:flex;flex-wrap:wrap;margin-top:10px;">${hist.map(h=>
+    `<span title="${h.number} (${rouletteColorLabel(h.color)})" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;font-size:11.5px;font-weight:700;margin:2px;background:${rouletteColorHex(h.color)};color:#f3e9d8;border:1px solid rgba(255,255,255,.2);">${h.number}</span>`
+  ).join('')}</div>`;
+}
+
+function renderRouletteBody(user, rl){
+  if(rl.phase==='girando') return renderRouletteSpinning(rl);
+  if(rl.phase==='resultado') return renderRouletteResult(rl);
+  return renderRouletteBetting(user, rl);
+}
+
+function renderRouletteBetting(user, rl){
+  const locked = state.locks && state.locks.roulette;
+  const remain = Math.max(0, (rl.bettingEndsAt||0) - now);
+  const pot = (rl.wagers||[]).reduce((s,w)=> s+w.amount, 0);
+  const myWagers = (rl.wagers||[]).filter(w=> w.user===me.username);
+  const disabled = locked ? 'disabled' : '';
+
+  const numGrid = Array.from({length:37}, (_,n)=> n).map(n=>{
+    const c = rouletteColor(n);
+    return `<button class="roulette-num" data-roulette-num="${n}" style="background:${rouletteColorHex(c)};" ${disabled}>${n}</button>`;
+  }).join('');
+
+  return `
+    <div class="race-status-bar">
+      <div class="rlabel">${locked ? 'Roleta fechada pelo host' : 'Apostas abertas'} · pote total <span class="mono">${fmt(pot)} pts</span></div>
+      <div class="rcountdown mono" id="rouletteCountdown">${locked ? '🔒' : fmtClock(remain)}</div>
+    </div>
+    ${!locked ? `<div class="admin-row" style="margin-bottom:10px;">
+      <span style="font-size:12px;color:var(--dim);">Valor da aposta:</span>
+      <input type="number" min="1" id="rouletteAmt" placeholder="pts" style="width:100px;" />
+    </div>` : ''}
+    <div class="roulette-grid">${numGrid}</div>
+    <div class="roulette-outside-row">
+      <button data-roulette-outside="cor:red" style="background:${rouletteColorHex('red')};color:#fff;" ${disabled}>Vermelho</button>
+      <button data-roulette-outside="cor:black" style="background:${rouletteColorHex('black')};color:#fff;" ${disabled}>Preto</button>
+      <button data-roulette-outside="paridade:par" ${disabled}>Par</button>
+      <button data-roulette-outside="paridade:impar" ${disabled}>Ímpar</button>
+      <button data-roulette-outside="metade:baixa" ${disabled}>1–18</button>
+      <button data-roulette-outside="metade:alta" ${disabled}>19–36</button>
+    </div>
+    ${myWagers.length ? `<div class="my-horse-wagers">Você apostou: ${myWagers.map(w=> `<b>${fmt(w.amount)}</b> em ${rouletteWagerLabel(w)}`).join(', ')}</div>` : ''}
+    ${rouletteHistoryHTML(rl)}
+    ${user.isAdmin && !locked ? `<div class="race-controls"><button id="closeRouletteBtn">Girar agora</button></div>` : ''}
+  `;
+}
+
+function rouletteWagerLabel(w){
+  if(w.betType==='numero') return `número ${w.betValue}`;
+  if(w.betType==='cor') return w.betValue==='red' ? 'vermelho' : 'preto';
+  if(w.betType==='paridade') return w.betValue;
+  if(w.betType==='metade') return w.betValue==='baixa' ? '1–18' : '19–36';
+  return '?';
+}
+
+function renderRouletteSpinning(rl){
+  const remainSec = rl.spinEndsAt ? Math.max(0, Math.ceil((rl.spinEndsAt-now)/1000)) : 0;
+  return `
+    <div class="race-status-bar">
+      <div class="rlabel">🎡 Girando…</div>
+      <div class="rcountdown mono" id="rouletteCountdown">${remainSec}s</div>
+    </div>
+    <div class="roulette-spin-display" id="rouletteSpinNum">–</div>
+    ${rouletteHistoryHTML(rl)}
+  `;
+}
+
+function renderRouletteResult(rl){
+  const remain = Math.max(0, (rl.resultEndsAt||0) - now);
+  return `
+    <div class="race-result-banner">
+      <div class="rwin"><span style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:${rouletteColorHex(rl.lastColor)};color:#fff;vertical-align:middle;margin-right:8px;">${rl.lastNumber}</span> ${rouletteColorLabel(rl.lastColor)}</div>
+      <div style="font-size:12.5px;color:var(--dim);margin-top:4px;">Próxima rodada em <span class="mono" id="rouletteCountdown">${fmtClock(remain)}</span></div>
+    </div>
+    ${rouletteHistoryHTML(rl)}
+  `;
+}
+
+async function refreshAndSave(mutator){
+  await loadState();
+  processExpiredBets();
+  processHorseRace();
+  processRoulette();
+  mutator();
+  await saveState();
+  render();
+}
+
+function bindGames(){
+  const hc = document.getElementById('raceHorseCount');
+  if(hc) hc.onchange = ()=>{ raceHorseCount = parseInt(hc.value,10); };
+  const rd = document.getElementById('raceDuration');
+  if(rd) rd.onchange = ()=>{ raceDuration = rd.value; };
+
+  const openBtn = document.getElementById('openRaceBtn');
+  if(openBtn) openBtn.onclick = async ()=>{
+    if(state.locks && state.locks.horses){ toast('Corrida fechada pelo host'); return; }
+    await refreshAndSave(()=>{
+      const horses = HORSE_ROSTER.slice(0, raceHorseCount);
+      state.horseRace = {
+        status:'apostas', horses, wagers:[],
+        startedAt: Date.now(), bettingEndsAt: Date.now() + parseInt(raceDuration,10)*1000,
+        startedAtRun:null, raceEndsAt:null, winnerId:null, potPaid:false
+      };
+      logEvent('cavalo', `Host abriu apostas para corrida com ${raceHorseCount} cavalos`);
+    });
+    toast('Apostas da corrida abertas');
+  };
+
+  document.querySelectorAll('[data-horse-bet]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const horseId = btn.dataset.horseBet;
+      const input = document.getElementById('hwager_'+horseId);
+      const amt = parseInt(input.value, 10);
+      if(!amt || amt<=0){ toast('Digite um valor válido'); return; }
+      await loadState();
+      processExpiredBets(); processHorseRace(); processRoulette();
+      const race = state.horseRace;
+      const u = state.users[me.key];
+      if(race.status!=='apostas'){ toast('As apostas já fecharam'); render(); return; }
+      if(amt > u.balance){ toast('Pontos insuficientes'); return; }
+      u.balance -= amt;
+      race.wagers.push({ user: me.username, horseId, amount: amt, ts: Date.now() });
+      await saveState();
+      toast(`Apostou ${fmt(amt)} pontos`);
+      render();
+    };
+  });
+
+  const closeBtn = document.getElementById('closeRaceBtn');
+  if(closeBtn) closeBtn.onclick = async ()=>{
+    await refreshAndSave(()=>{
+      const race = state.horseRace;
+      if(race.status==='apostas') race.bettingEndsAt = Date.now();
+    });
+  };
+  const cancelBtn = document.getElementById('cancelRaceBtn');
+  if(cancelBtn) cancelBtn.onclick = async ()=>{
+    if(!confirm('Cancelar a corrida e devolver os pontos apostados?')) return;
+    await refreshAndSave(()=>{
+      const race = state.horseRace;
+      (race.wagers||[]).forEach(w=>{ const u=state.users[String(w.user).toLowerCase()]; if(u) u.balance += w.amount; });
+      state.horseRace = { status:'fechada', horses:[], wagers:[], startedAt:null, bettingEndsAt:null, startedAtRun:null, raceEndsAt:null, winnerId:null, potPaid:false };
+      logEvent('cavalo', 'Host cancelou a corrida e devolveu os pontos apostados');
+    });
+    toast('Corrida cancelada, pontos devolvidos');
+  };
+  const newRaceBtn = document.getElementById('newRaceBtn');
+  if(newRaceBtn) newRaceBtn.onclick = async ()=>{
+    await refreshAndSave(()=>{
+      state.horseRace = { status:'fechada', horses:[], wagers:[], startedAt:null, bettingEndsAt:null, startedAtRun:null, raceEndsAt:null, winnerId:null, potPaid:false };
+    });
+  };
+
+  async function placeRouletteWager(betType, betValue){
+    if(state.locks && state.locks.roulette){ toast('Roleta fechada pelo host'); return; }
+    const amtEl = document.getElementById('rouletteAmt');
+    const amt = parseInt(amtEl ? amtEl.value : '', 10);
+    if(!amt || amt<=0){ toast('Digite um valor válido no campo de pontos'); return; }
+    await loadState();
+    processExpiredBets(); processHorseRace(); processRoulette();
+    const rl = state.roulette;
+    const u = state.users[me.key];
+    if(rl.phase!=='apostas'){ toast('As apostas já fecharam'); render(); return; }
+    if(amt > u.balance){ toast('Pontos insuficientes'); return; }
+    u.balance -= amt;
+    rl.wagers.push({ user: me.username, betType, betValue, amount: amt, ts: Date.now() });
+    await saveState();
+    toast(`Apostou ${fmt(amt)} pontos`);
+    render();
+  }
+  document.querySelectorAll('[data-roulette-num]').forEach(btn=>{
+    btn.onclick = ()=> placeRouletteWager('numero', btn.dataset.rouletteNum);
+  });
+  document.querySelectorAll('[data-roulette-outside]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const [betType, betValue] = btn.dataset.rouletteOutside.split(':');
+      placeRouletteWager(betType, betValue);
+    };
+  });
+  const closeRouletteBtn = document.getElementById('closeRouletteBtn');
+  if(closeRouletteBtn) closeRouletteBtn.onclick = async ()=>{
+    await refreshAndSave(()=>{
+      const rl = state.roulette;
+      if(rl.phase==='apostas') rl.bettingEndsAt = Date.now();
+    });
+  };
+}
+
+function startLiveLoop(){
+  if(liveLoopHandle) return; // já está rodando
+  let lastFrame = 0;
+  let lastSpinFlicker = 0;
+  function frame(ts){
+    if(!lastFrame || ts - lastFrame > 33){ // ~30fps
+      lastFrame = ts;
+      now = Date.now();
+      const race = state.horseRace;
+      if(race){
+        if(race.status==='apostas'){
+          const el = document.getElementById('raceCountdown');
+          if(el){
+            const remain = Math.max(0, (race.bettingEndsAt||0) - now);
+            el.textContent = remain<=0 ? '⏳' : fmtClock(remain);
+          }
+        } else if(race.status==='correndo' && race.startedAtRun && race.raceEndsAt){
+          const t = Math.max(0, Math.min(1, (now - race.startedAtRun) / (race.raceEndsAt - race.startedAtRun)));
+          const seed = String(race.startedAtRun || race.bettingEndsAt || 0);
+          race.horses.forEach(h=>{
+            const elLane = document.getElementById('lane_'+h.id);
+            if(elLane){ const prog = horseProgress(h.id, h.id===race.winnerId, seed, t); elLane.style.left = (prog*100).toFixed(1)+'%'; }
+          });
+          const cd = document.getElementById('raceCountdown');
+          if(cd){ const remainSec = Math.max(0, Math.ceil((race.raceEndsAt-now)/1000)); cd.textContent = remainSec+'s'; }
+          const lbl = document.getElementById('racePhaseLabel');
+          if(lbl){ lbl.textContent = '🏁 ' + (t<=RACE_HOLD_FRACTION ? 'Na largada…' : 'Correndo!'); }
+        }
+      }
+      const rl = state.roulette;
+      if(rl){
+        if(rl.phase==='apostas'){
+          const el = document.getElementById('rouletteCountdown');
+          if(el && !(state.locks && state.locks.roulette)){
+            const remain = Math.max(0, (rl.bettingEndsAt||0) - now);
+            el.textContent = fmtClock(remain);
+          }
+        } else if(rl.phase==='girando'){
+          const cd = document.getElementById('rouletteCountdown');
+          if(cd){ const remainSec = Math.max(0, Math.ceil(((rl.spinEndsAt||now)-now)/1000)); cd.textContent = remainSec+'s'; }
+          if(ts - lastSpinFlicker > 70){
+            lastSpinFlicker = ts;
+            const numEl = document.getElementById('rouletteSpinNum');
+            if(numEl) numEl.textContent = Math.floor(Math.random()*37);
+          }
+        } else if(rl.phase==='resultado'){
+          const cd = document.getElementById('rouletteCountdown');
+          if(cd){ const remain = Math.max(0, (rl.resultEndsAt||0) - now); cd.textContent = fmtClock(remain); }
+        }
+      }
+    }
+    liveLoopHandle = requestAnimationFrame(frame);
+  }
+  liveLoopHandle = requestAnimationFrame(frame);
+}
+
+async function boot(){
+  loadSession();
+  await loadState();
+  if(sessionStillValid()){
+    // marca o instante em que a corrida passou a "correr" (usado pra animação)
+    if(state.horseRace && state.horseRace.status==='correndo' && !state.horseRace.startedAtRun){
+      state.horseRace.startedAtRun = state.horseRace.raceEndsAt - RACE_DURATION_MS;
+    }
+    const c1 = processExpiredBets();
+    const c2 = processHorseRace();
+    const c3 = processRoulette();
+    if(c1 || c2 || c3) await saveState();
+  }
+  render();
+  startLiveLoop();
+  setInterval(async ()=>{
+    now = Date.now();
+    const active = document.activeElement;
+    const isTyping = active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName);
+    if(isTyping) return;
+    await loadState();
+    if(sessionStillValid()){
+      if(state.horseRace && state.horseRace.status==='correndo' && !state.horseRace.startedAtRun){
+        state.horseRace.startedAtRun = state.horseRace.raceEndsAt - RACE_DURATION_MS;
+      }
+      const c1 = processExpiredBets();
+      const c2 = processHorseRace();
+      const c3 = processRoulette();
+      if(c1 || c2 || c3) await saveState();
+    }
+    render();
+  }, 1200);
+}
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,1446 @@
+{
+  "users": {
+    "casa": {
+      "username": "Casa",
+      "passwordHash": "08d100b70b035a80261896d617f2b2885f69f4282f437b7246939f8a08313b9f",
+      "isAdmin": true,
+      "hidden": true,
+      "balance": 0,
+      "createdAt": 1789592518683,
+      "lastBonus": 0,
+      "lastSpin": 0,
+      "owned": {
+        "colors": [],
+        "tags": [],
+        "crests": [],
+        "avatars": [],
+        "backgrounds": []
+      },
+      "equipped": {
+        "color": null,
+        "tag": null,
+        "crest": null,
+        "avatar": null,
+        "background": null
+      },
+      "customAvatarData": null
+    },
+    "th3_err0r": {
+      "username": "Th3_Err0r",
+      "passwordHash": "f0e4c2f76c58916ec258f246851bea091d14d4247a2fc3e18694461b1816e13b",
+      "isAdmin": true,
+      "hidden": false,
+      "balance": 290,
+      "createdAt": 1789700951714,
+      "lastBonus": 1789700975033,
+      "lastSpin": 1789700976892,
+      "owned": {
+        "colors": [],
+        "tags": [
+          "t_tubarao"
+        ],
+        "crests": [
+          "k_shark"
+        ],
+        "avatars": [],
+        "backgrounds": []
+      },
+      "equipped": {
+        "color": null,
+        "tag": "t_tubarao",
+        "crest": "k_shark",
+        "avatar": null,
+        "background": null
+      },
+      "customAvatarData": null
+    },
+    "cylocate": {
+      "username": "Cylocate",
+      "passwordHash": null,
+      "isAdmin": false,
+      "hidden": false,
+      "balance": 90,
+      "createdAt": 0,
+      "lastBonus": 1789756911271,
+      "lastSpin": 1789756913343,
+      "owned": {
+        "colors": [],
+        "tags": [],
+        "crests": [],
+        "avatars": [],
+        "backgrounds": []
+      },
+      "equipped": {
+        "color": null,
+        "tag": null,
+        "crest": null,
+        "avatar": null,
+        "background": null
+      },
+      "customAvatarData": null
+    },
+    "hollowkinight": {
+      "username": "HollowKinight",
+      "passwordHash": null,
+      "isAdmin": false,
+      "hidden": false,
+      "balance": 150,
+      "createdAt": 0,
+      "lastBonus": 0,
+      "lastSpin": 0,
+      "owned": {
+        "colors": [],
+        "tags": [],
+        "crests": [],
+        "avatars": [],
+        "backgrounds": []
+      },
+      "equipped": {
+        "color": null,
+        "tag": null,
+        "crest": null,
+        "avatar": null,
+        "background": null
+      },
+      "customAvatarData": null
+    },
+    "jobs": {
+      "username": "JOBS",
+      "passwordHash": null,
+      "isAdmin": false,
+      "hidden": false,
+      "balance": 446,
+      "createdAt": 0,
+      "lastBonus": 1789679988189,
+      "lastSpin": 1789679995217,
+      "owned": {
+        "colors": [],
+        "tags": [],
+        "crests": [],
+        "avatars": [],
+        "backgrounds": []
+      },
+      "equipped": {
+        "color": null,
+        "tag": null,
+        "crest": null,
+        "avatar": null,
+        "background": null
+      },
+      "customAvatarData": null
+    },
+    "nayla": {
+      "username": "Nayla",
+      "passwordHash": null,
+      "isAdmin": false,
+      "hidden": false,
+      "balance": 0,
+      "createdAt": 0,
+      "lastBonus": 0,
+      "lastSpin": 0,
+      "owned": {
+        "colors": [],
+        "tags": [],
+        "crests": [],
+        "avatars": [],
+        "backgrounds": []
+      },
+      "equipped": {
+        "color": null,
+        "tag": null,
+        "crest": null,
+        "avatar": null,
+        "background": null
+      },
+      "customAvatarData": null
+    },
+    "toaldo": {
+      "username": "Toaldo",
+      "passwordHash": null,
+      "isAdmin": false,
+      "hidden": false,
+      "balance": 0,
+      "createdAt": 0,
+      "lastBonus": 0,
+      "lastSpin": 0,
+      "owned": {
+        "colors": [],
+        "tags": [],
+        "crests": [],
+        "avatars": [],
+        "backgrounds": []
+      },
+      "equipped": {
+        "color": null,
+        "tag": null,
+        "crest": null,
+        "avatar": null,
+        "background": null
+      },
+      "customAvatarData": null
+    },
+    "test": {
+      "username": "test",
+      "passwordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",
+      "isAdmin": false,
+      "hidden": false,
+      "balance": 500,
+      "createdAt": 1790019256894,
+      "lastBonus": 0,
+      "lastSpin": 0,
+      "customAvatarData": null,
+      "owned": {
+        "colors": [],
+        "tags": [],
+        "crests": [],
+        "avatars": [],
+        "backgrounds": []
+      },
+      "equipped": {
+        "color": null,
+        "tag": null,
+        "crest": null,
+        "avatar": null,
+        "background": null
+      }
+    }
+  },
+  "bets": [
+    {
+      "id": "b_demo1",
+      "title": "Quem vai ganhar o primeiro jogo da noite?",
+      "type": "fixa",
+      "options": [
+        "Time A",
+        "Time B"
+      ],
+      "creator": "Casa",
+      "status": "aberta",
+      "wagers": [],
+      "winner": null,
+      "cost": 0,
+      "createdAt": 1789592518683,
+      "expiresAt": null
+    },
+    {
+      "id": "b_mu6dsz19p8y02",
+      "title": "asd",
+      "type": "fixa",
+      "options": [
+        "dasd"
+      ],
+      "creator": "Th3_Err0r",
+      "status": "expirada",
+      "wagers": [],
+      "winner": null,
+      "cost": 20,
+      "createdAt": 1789701064029,
+      "expiresAt": 1789787464029
+    },
+    {
+      "id": "bmu60pkufk44q",
+      "title": "Quem vai \"ganhar\" ( menor nota ) na prova de Matématica",
+      "type": "fixa",
+      "options": [
+        "Nayla",
+        "Bueno",
+        "Jorge",
+        "Felipe",
+        "Toaldo"
+      ],
+      "creator": "Th3_Err0r",
+      "status": "aberta",
+      "wagers": [
+        {
+          "amount": 270,
+          "option": "Bueno",
+          "ts": 1789679361236,
+          "user": "Th3_Err0r"
+        },
+        {
+          "amount": 270,
+          "option": "Nayla",
+          "ts": 1789679690909,
+          "user": "Cylocate"
+        },
+        {
+          "amount": 30,
+          "option": "Felipe",
+          "ts": 1789679699935,
+          "user": "Cylocate"
+        },
+        {
+          "amount": 30,
+          "option": "Felipe",
+          "ts": 1789679708167,
+          "user": "Cylocate"
+        },
+        {
+          "amount": 260,
+          "option": "Toaldo",
+          "ts": 1789683162175,
+          "user": "Th3_Err0r"
+        },
+        {
+          "amount": 100,
+          "option": "Bueno",
+          "ts": 1789683656590,
+          "user": "HollowKinight"
+        },
+        {
+          "amount": 200,
+          "option": "Bueno",
+          "ts": 1789755680643,
+          "user": "Nayla"
+        },
+        {
+          "amount": 50,
+          "option": "Toaldo",
+          "ts": 1789755691760,
+          "user": "Nayla"
+        },
+        {
+          "amount": 50,
+          "option": "Felipe",
+          "ts": 1789755699229,
+          "user": "Nayla"
+        },
+        {
+          "amount": 50,
+          "option": "Jorge",
+          "ts": 1789755703353,
+          "user": "Nayla"
+        }
+      ],
+      "winner": null,
+      "cost": 20,
+      "createdAt": 1789679070663,
+      "expiresAt": null,
+      "pinned": false
+    },
+    {
+      "id": "bmu60r60nkru9",
+      "title": "Quem vai \"ganhar\" ( menor nota ) na prova de Química",
+      "type": "fixa",
+      "options": [
+        "Nayla",
+        "Bueno",
+        "Jorge",
+        "Felipe",
+        "Toaldo"
+      ],
+      "creator": "Th3_Err0r",
+      "status": "aberta",
+      "wagers": [
+        {
+          "amount": 200,
+          "option": "Jorge",
+          "ts": 1789679325795,
+          "user": "Th3_Err0r"
+        },
+        {
+          "amount": 300,
+          "option": "Jorge",
+          "ts": 1789679336761,
+          "user": "Th3_Err0r"
+        },
+        {
+          "amount": 200,
+          "option": "Bueno",
+          "ts": 1789679341461,
+          "user": "Th3_Err0r"
+        },
+        {
+          "amount": 200,
+          "option": "Nayla",
+          "ts": 1789679524937,
+          "user": "Toaldo"
+        },
+        {
+          "amount": 100,
+          "option": "Bueno",
+          "ts": 1789679530171,
+          "user": "Toaldo"
+        },
+        {
+          "amount": 200,
+          "option": "Toaldo",
+          "ts": 1789679539118,
+          "user": "Toaldo"
+        },
+        {
+          "amount": 50,
+          "option": "Nayla",
+          "ts": 1789679660960,
+          "user": "Cylocate"
+        },
+        {
+          "amount": 50,
+          "option": "Bueno",
+          "ts": 1789679663925,
+          "user": "Cylocate"
+        },
+        {
+          "amount": 50,
+          "option": "Jorge",
+          "ts": 1789679666792,
+          "user": "Cylocate"
+        },
+        {
+          "amount": 50,
+          "option": "Felipe",
+          "ts": 1789679669783,
+          "user": "Cylocate"
+        },
+        {
+          "amount": 50,
+          "option": "Toaldo",
+          "ts": 1789679672843,
+          "user": "Cylocate"
+        },
+        {
+          "amount": 67,
+          "option": "Nenhuma das opções",
+          "ts": 1789680090277,
+          "user": "JOBS"
+        },
+        {
+          "amount": 67,
+          "option": "Jorge",
+          "ts": 1789680119544,
+          "user": "JOBS"
+        },
+        {
+          "amount": 250,
+          "option": "Toaldo",
+          "ts": 1789683129320,
+          "user": "HollowKinight"
+        },
+        {
+          "amount": 200,
+          "option": "Felipe",
+          "ts": 1789755615428,
+          "user": "Cylocate"
+        },
+        {
+          "amount": 50,
+          "option": "Bueno",
+          "ts": 1789755641066,
+          "user": "Nayla"
+        },
+        {
+          "amount": 50,
+          "option": "Bueno",
+          "ts": 1789755642115,
+          "user": "Nayla"
+        },
+        {
+          "amount": 110,
+          "option": "Bueno",
+          "ts": 1789755642996,
+          "user": "Th3_Err0r"
+        },
+        {
+          "amount": 50,
+          "option": "Toaldo",
+          "ts": 1789755648073,
+          "user": "Nayla"
+        },
+        {
+          "amount": 90,
+          "option": "Bueno",
+          "ts": 1789756759506,
+          "user": "Th3_Err0r"
+        },
+        {
+          "user": "Th3_Err0r",
+          "option": "Bueno",
+          "amount": 10,
+          "ts": 1789757230980
+        }
+      ],
+      "winner": null,
+      "cost": 20,
+      "createdAt": 1789679144759,
+      "expiresAt": null,
+      "pinned": false
+    }
+  ],
+  "chat": [
+    {
+      "id": "m_demo1",
+      "user": "Casa",
+      "text": "Bem-vindo! Crie sua conta, pegue seu bônus e boa sorte.",
+      "ts": 1789592518683,
+      "house": true
+    },
+    {
+      "id": "mmu63crl9cqhw",
+      "system": true,
+      "text": "Th3_Err0r recebeu Pulso neon das mãos da casa.",
+      "ts": 1789683511725
+    }
+  ],
+  "banned": [],
+  "settings": {
+    "startBalance": 500,
+    "closed": {
+      "loja": false,
+      "apostas": false,
+      "cacaniquel": false,
+      "cavalos": false
+    }
+  },
+  "shop": {
+    "colors": [
+      {
+        "id": "c_gold",
+        "label": "Dourado",
+        "hex": "#e8c873",
+        "price": 150
+      },
+      {
+        "id": "c_silver",
+        "label": "Prata",
+        "hex": "#c9c9d1",
+        "price": 150
+      },
+      {
+        "id": "c_green",
+        "label": "Verde Esmeralda",
+        "hex": "#3fbf7f",
+        "price": 200
+      },
+      {
+        "id": "c_blue",
+        "label": "Azul Real",
+        "hex": "#4a8fe0",
+        "price": 200
+      },
+      {
+        "id": "c_purple",
+        "label": "Roxo Real",
+        "hex": "#a34bff",
+        "price": 250
+      },
+      {
+        "id": "c_white",
+        "label": "Branco Puro",
+        "hex": "#ffffff",
+        "price": 100
+      },
+      {
+        "id": "c_red",
+        "label": "Vermelho Sangue",
+        "hex": "#e0524a",
+        "price": 200
+      },
+      {
+        "id": "c_pink",
+        "label": "Rosa Choque",
+        "hex": "#ff8fc4",
+        "price": 220
+      },
+      {
+        "id": "c_orange",
+        "label": "Laranja Fogo",
+        "hex": "#ff9f4a",
+        "price": 200
+      },
+      {
+        "id": "c_teal",
+        "label": "Turquesa",
+        "hex": "#3fd9c7",
+        "price": 220
+      },
+      {
+        "id": "c_lime",
+        "label": "Verde Limão",
+        "hex": "#b6e84a",
+        "price": 220
+      },
+      {
+        "id": "c_cyan",
+        "label": "Ciano",
+        "hex": "#4ad9ff",
+        "price": 220
+      },
+      {
+        "id": "c_magenta",
+        "label": "Magenta",
+        "hex": "#e34ae0",
+        "price": 250
+      },
+      {
+        "id": "c_bronze",
+        "label": "Bronze",
+        "hex": "#a8763e",
+        "price": 150
+      },
+      {
+        "id": "c_ice",
+        "label": "Gelo",
+        "hex": "#cdeaff",
+        "price": 180
+      },
+      {
+        "id": "c_crimson",
+        "label": "Carmesim",
+        "hex": "#ff3b5c",
+        "price": 250
+      },
+      {
+        "id": "c_lavender",
+        "label": "Lavanda",
+        "hex": "#c9a8ff",
+        "price": 220
+      }
+    ],
+    "tags": [
+      {
+        "id": "t_apostador",
+        "label": "Apostador",
+        "price": 100
+      },
+      {
+        "id": "t_sortudo",
+        "label": "Sortudo",
+        "price": 150
+      },
+      {
+        "id": "t_tubarao",
+        "label": "Tubarão",
+        "price": 300
+      },
+      {
+        "id": "t_banqueiro",
+        "label": "Banqueiro",
+        "price": 400
+      },
+      {
+        "id": "t_lenda",
+        "label": "Lenda",
+        "price": 600
+      },
+      {
+        "id": "t_vip",
+        "label": "VIP",
+        "price": 500
+      },
+      {
+        "id": "t_novato",
+        "label": "Novato",
+        "price": 50
+      },
+      {
+        "id": "t_azarado",
+        "label": "Azarado",
+        "price": 120
+      },
+      {
+        "id": "t_rei_da_mesa",
+        "label": "Rei da Mesa",
+        "price": 700
+      },
+      {
+        "id": "t_fiel",
+        "label": "Fiel",
+        "price": 150
+      },
+      {
+        "id": "t_maldito",
+        "label": "Maldito",
+        "price": 280
+      }
+    ],
+    "crests": [
+      {
+        "id": "k_dice",
+        "emoji": "🎲",
+        "label": "Dados",
+        "price": 50
+      },
+      {
+        "id": "k_spade",
+        "emoji": "♠️",
+        "label": "Espadas",
+        "price": 80
+      },
+      {
+        "id": "k_joker",
+        "emoji": "🃏",
+        "label": "Joker",
+        "price": 120
+      },
+      {
+        "id": "k_money",
+        "emoji": "💰",
+        "label": "Saco de Grana",
+        "price": 150
+      },
+      {
+        "id": "k_fire",
+        "emoji": "🔥",
+        "label": "Fogo",
+        "price": 150
+      },
+      {
+        "id": "k_bolt",
+        "emoji": "⚡",
+        "label": "Raio",
+        "price": 180
+      },
+      {
+        "id": "k_skull",
+        "emoji": "☠️",
+        "label": "Caveira",
+        "price": 200
+      },
+      {
+        "id": "k_gem",
+        "emoji": "💎",
+        "label": "Diamante",
+        "price": 250
+      },
+      {
+        "id": "k_shark",
+        "emoji": "🦈",
+        "label": "Tubarão",
+        "price": 300
+      },
+      {
+        "id": "k_dragon",
+        "emoji": "🐉",
+        "label": "Dragão",
+        "price": 350
+      },
+      {
+        "id": "k_crown",
+        "emoji": "👑",
+        "label": "Coroa",
+        "price": 400
+      },
+      {
+        "id": "k_heart",
+        "emoji": "♥️",
+        "label": "Copas",
+        "price": 100
+      },
+      {
+        "id": "k_club",
+        "emoji": "♣️",
+        "label": "Paus",
+        "price": 90
+      },
+      {
+        "id": "k_star",
+        "emoji": "⭐",
+        "label": "Estrela",
+        "price": 140
+      },
+      {
+        "id": "k_bomb",
+        "emoji": "💣",
+        "label": "Bomba",
+        "price": 200
+      },
+      {
+        "id": "k_trophy",
+        "emoji": "🏆",
+        "label": "Troféu",
+        "price": 350
+      },
+      {
+        "id": "k_target",
+        "emoji": "🎯",
+        "label": "Alvo",
+        "price": 150
+      },
+      {
+        "id": "k_unicorn",
+        "emoji": "🦄",
+        "label": "Unicórnio",
+        "price": 300
+      }
+    ],
+    "avatars": [
+      {
+        "id": "a_ace",
+        "emoji": "🂡",
+        "label": "Ás de Espadas",
+        "price": 120
+      },
+      {
+        "id": "a_dice",
+        "emoji": "🎲",
+        "label": "Dado",
+        "price": 100
+      },
+      {
+        "id": "a_chip",
+        "emoji": "🔴",
+        "label": "Ficha",
+        "price": 100
+      },
+      {
+        "id": "a_wolf",
+        "emoji": "🐺",
+        "label": "Lobo",
+        "price": 200
+      },
+      {
+        "id": "a_lion",
+        "emoji": "🦁",
+        "label": "Leão",
+        "price": 250
+      },
+      {
+        "id": "a_devil",
+        "emoji": "😈",
+        "label": "Diabinho",
+        "price": 220
+      },
+      {
+        "id": "a_ghost",
+        "emoji": "👻",
+        "label": "Fantasma",
+        "price": 150
+      },
+      {
+        "id": "a_alien",
+        "emoji": "👽",
+        "label": "Alien",
+        "price": 180
+      },
+      {
+        "id": "a_robot",
+        "emoji": "🤖",
+        "label": "Robô",
+        "price": 180
+      },
+      {
+        "id": "a_crownface",
+        "emoji": "🤴",
+        "label": "Realeza",
+        "price": 300
+      },
+      {
+        "id": "a_clown",
+        "emoji": "🤡",
+        "label": "Palhaço",
+        "price": 90
+      },
+      {
+        "id": "a_skullface",
+        "emoji": "💀",
+        "label": "Caveira",
+        "price": 200
+      },
+      {
+        "id": "a_queen",
+        "emoji": "👸",
+        "label": "Rainha",
+        "price": 250
+      },
+      {
+        "id": "a_ninja",
+        "emoji": "🥷",
+        "label": "Ninja",
+        "price": 220
+      },
+      {
+        "id": "a_vampire",
+        "emoji": "🧛",
+        "label": "Vampiro",
+        "price": 230
+      },
+      {
+        "id": "a_wizard",
+        "emoji": "🧙",
+        "label": "Mago",
+        "price": 230
+      },
+      {
+        "id": "a_outlaw",
+        "emoji": "🦹",
+        "label": "Fora da Lei",
+        "price": 200
+      },
+      {
+        "id": "a_astronaut",
+        "emoji": "👨‍🚀",
+        "label": "Astronauta",
+        "price": 250
+      },
+      {
+        "id": "a_unicornface",
+        "emoji": "🦄",
+        "label": "Unicórnio",
+        "price": 260
+      },
+      {
+        "id": "a_dragonface",
+        "emoji": "🐲",
+        "label": "Dragão",
+        "price": 240
+      },
+      {
+        "id": "a_custom_upload",
+        "emoji": "📷",
+        "label": "Foto customizada (envie a sua)",
+        "price": 10000
+      }
+    ],
+    "backgrounds": [
+      {
+        "id": "bg_red",
+        "label": "Fundo Sangue",
+        "hex": "#4a0e14",
+        "price": 80
+      },
+      {
+        "id": "bg_blue",
+        "label": "Fundo Noturno",
+        "hex": "#0e2a4a",
+        "price": 80
+      },
+      {
+        "id": "bg_green",
+        "label": "Fundo Esmeralda",
+        "hex": "#0e4a1e",
+        "price": 80
+      },
+      {
+        "id": "bg_purple",
+        "label": "Fundo Roxo",
+        "hex": "#2a0e4a",
+        "price": 80
+      },
+      {
+        "id": "bg_gold",
+        "label": "Fundo Dourado",
+        "hex": "#4a3a0e",
+        "price": 100
+      },
+      {
+        "id": "bg_black",
+        "label": "Fundo Preto",
+        "hex": "#000000",
+        "price": 60
+      },
+      {
+        "id": "bg_white",
+        "label": "Fundo Branco",
+        "hex": "#ffffff",
+        "price": 120
+      },
+      {
+        "id": "bg_pink",
+        "label": "Fundo Rosa Escuro",
+        "hex": "#4a0e33",
+        "price": 100
+      }
+    ]
+  },
+  "announcements": [],
+  "events": [],
+  "log": [
+    {
+      "text": "excluiu a aposta “Quem vai ganhar o primeiro jogo da noite?”",
+      "ts": 1789678929003,
+      "who": "Casa"
+    },
+    {
+      "text": "mudou as regras da casa",
+      "ts": 1789678953969,
+      "who": "Casa"
+    },
+    {
+      "text": "mudou as regras da casa",
+      "ts": 1789678979043,
+      "who": "Casa"
+    },
+    {
+      "text": "mudou as regras da casa",
+      "ts": 1789679002649,
+      "who": "Casa"
+    },
+    {
+      "text": "definiu 800 pts — Th3_Err0r",
+      "ts": 1789679175378,
+      "who": "Casa"
+    },
+    {
+      "text": "definiu 600 pts — Gambling",
+      "ts": 1789679184199,
+      "who": "Casa"
+    },
+    {
+      "text": "carregou o pacote inicial (29 itens)",
+      "ts": 1789679480742,
+      "who": "Casa"
+    },
+    {
+      "text": "limpou o chat",
+      "ts": 1789683246493,
+      "who": "Casa"
+    },
+    {
+      "text": "entregou “Tubarão” para Th3_Err0r",
+      "ts": 1789683360338,
+      "who": "Casa"
+    },
+    {
+      "text": "entregou “Fala dourada” para Th3_Err0r",
+      "ts": 1789683463778,
+      "who": "Casa"
+    },
+    {
+      "text": "limpou o chat",
+      "ts": 1789683477297,
+      "who": "Casa"
+    },
+    {
+      "text": "entregou “Pulso neon” para Th3_Err0r",
+      "ts": 1789683511725,
+      "who": "Casa"
+    },
+    {
+      "text": "excluiu a conta Gambling",
+      "ts": 1789683702442,
+      "who": "Casa"
+    }
+  ],
+  "legacy": {
+    "users": {
+      "Th3_Err0r": {
+        "inventory": [
+          "imu60yd9iwlik",
+          "imu60yd9i2lj5",
+          "imu60yd9iz0ws"
+        ],
+        "equipped": {
+          "efeito": null,
+          "moldura": "imu60yd9iz0ws",
+          "tag": "imu60yd9iwlik"
+        }
+      }
+    },
+    "shopItems": [
+      {
+        "ativo": true,
+        "createdAt": 1789679480741,
+        "data": {
+          "color": "#a8112a",
+          "color2": ""
+        },
+        "desc": "A cor do salão.",
+        "exclusivo": false,
+        "id": "imu60yd9hfj4f",
+        "nome": "Vermelho da casa",
+        "preco": 300,
+        "tipo": "cor"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480742,
+        "data": {
+          "color": "#f2ece3",
+          "color2": ""
+        },
+        "desc": "Discreto e limpo.",
+        "exclusivo": false,
+        "id": "imu60yd9hdks1",
+        "nome": "Osso",
+        "preco": 150,
+        "tipo": "cor"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480743,
+        "data": {
+          "color": "#c9a227",
+          "color2": ""
+        },
+        "desc": "Para quem já ganhou alguma.",
+        "exclusivo": false,
+        "id": "imu60yd9hjskl",
+        "nome": "Latão",
+        "preco": 900,
+        "tipo": "cor"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480744,
+        "data": {
+          "color": "#4db8ff",
+          "color2": ""
+        },
+        "desc": "Sangue frio na mesa.",
+        "exclusivo": false,
+        "id": "imu60yd9h6yr6",
+        "nome": "Azul gelo",
+        "preco": 500,
+        "tipo": "cor"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480745,
+        "data": {
+          "color": "#2f7d5c",
+          "color2": ""
+        },
+        "desc": "Cor de quem só pensa no pote.",
+        "exclusivo": false,
+        "id": "imu60yd9hb1qb",
+        "nome": "Verde feltro",
+        "preco": 500,
+        "tipo": "cor"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480746,
+        "data": {
+          "color": "#a259ff",
+          "color2": ""
+        },
+        "desc": "Dizem que atrai trinca.",
+        "exclusivo": false,
+        "id": "imu60yd9hgk6b",
+        "nome": "Roxo da sorte",
+        "preco": 700,
+        "tipo": "cor"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480747,
+        "data": {
+          "color": "#ff8a00",
+          "color2": "#a8112a"
+        },
+        "desc": "Do laranja ao vermelho.",
+        "exclusivo": false,
+        "id": "imu60yd9hlfcu",
+        "nome": "Degradê brasa",
+        "preco": 1600,
+        "tipo": "cor"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480748,
+        "data": {
+          "color": "#00ffc8",
+          "color2": "#4d7cff"
+        },
+        "desc": "Verde-água virando azul.",
+        "exclusivo": false,
+        "id": "imu60yd9hwtef",
+        "nome": "Degradê neon",
+        "preco": 1600,
+        "tipo": "cor"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480749,
+        "data": {
+          "bg": "#2a1a20",
+          "fg": "#b6a5aa",
+          "text": "NOVATO"
+        },
+        "desc": "Acabou de sentar.",
+        "exclusivo": false,
+        "id": "imu60yd9hfg4b",
+        "nome": "Novato",
+        "preco": 100,
+        "tipo": "tag"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480751,
+        "data": {
+          "bg": "#a8112a",
+          "fg": "#ffffff",
+          "text": "APOSTADOR"
+        },
+        "desc": "Já sabe o que faz.",
+        "exclusivo": false,
+        "id": "imu60yd9i463r",
+        "nome": "Apostador",
+        "preco": 400,
+        "tipo": "tag"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480752,
+        "data": {
+          "bg": "#0e3b5c",
+          "fg": "#9fdcff",
+          "text": "TUBARÃO"
+        },
+        "desc": "Cuidado com esse.",
+        "exclusivo": false,
+        "id": "imu60yd9iwlik",
+        "nome": "Tubarão",
+        "preco": 900,
+        "tipo": "tag"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480753,
+        "data": {
+          "bg": "#1e4d3b",
+          "fg": "#b7ffdc",
+          "text": "SORTUDO"
+        },
+        "desc": "Ganha sem entender como.",
+        "exclusivo": false,
+        "id": "imu60yd9if6ng",
+        "nome": "Sortudo",
+        "preco": 600,
+        "tipo": "tag"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480754,
+        "data": {
+          "bg": "#1a1015",
+          "fg": "#7d6b72",
+          "text": "QUEBRADO"
+        },
+        "desc": "Honestidade acima de tudo.",
+        "exclusivo": false,
+        "id": "imu60yd9ircba",
+        "nome": "Quebrado",
+        "preco": 50,
+        "tipo": "tag"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480755,
+        "data": {
+          "bg": "#c9a227",
+          "fg": "#1b1206",
+          "text": "VIP"
+        },
+        "desc": "Tratamento de camarote.",
+        "exclusivo": false,
+        "id": "imu60yd9ia2da",
+        "nome": "VIP",
+        "preco": 1300,
+        "tipo": "tag"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480756,
+        "data": {
+          "bg": "#e0263f",
+          "fg": "#ffffff",
+          "text": "LENDA"
+        },
+        "desc": "Só para quem ficou na história.",
+        "exclusivo": false,
+        "id": "imu60yd9iymv6",
+        "nome": "Lenda",
+        "preco": 3000,
+        "tipo": "tag"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480757,
+        "data": {
+          "emoji": "👑",
+          "src": ""
+        },
+        "desc": "Dono da mesa.",
+        "exclusivo": false,
+        "id": "imu60yd9ijy6c",
+        "nome": "Coroa",
+        "preco": 1000,
+        "tipo": "brasao"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480758,
+        "data": {
+          "emoji": "🐉",
+          "src": ""
+        },
+        "desc": "Aposta alto.",
+        "exclusivo": false,
+        "id": "imu60yd9iqf6c",
+        "nome": "Dragão",
+        "preco": 900,
+        "tipo": "brasao"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480759,
+        "data": {
+          "emoji": "🃏",
+          "src": ""
+        },
+        "desc": "Nunca se sabe.",
+        "exclusivo": false,
+        "id": "imu60yd9i3t7a",
+        "nome": "Coringa",
+        "preco": 700,
+        "tipo": "brasao"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480760,
+        "data": {
+          "emoji": "💀",
+          "src": ""
+        },
+        "desc": "Perdeu tudo e voltou.",
+        "exclusivo": false,
+        "id": "imu60yd9i6f4u",
+        "nome": "Caveira",
+        "preco": 500,
+        "tipo": "brasao"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480761,
+        "data": {
+          "emoji": "🎲",
+          "src": ""
+        },
+        "desc": "O básico bem feito.",
+        "exclusivo": false,
+        "id": "imu60yd9i603t",
+        "nome": "Dado",
+        "preco": 300,
+        "tipo": "brasao"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480762,
+        "data": {
+          "emoji": "🔥",
+          "src": ""
+        },
+        "desc": "Tá pegando fogo.",
+        "exclusivo": false,
+        "id": "imu60yd9ixzq6",
+        "nome": "Chama",
+        "preco": 400,
+        "tipo": "brasao"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480763,
+        "data": {
+          "emoji": "🦈",
+          "src": ""
+        },
+        "desc": "Come os pequenos.",
+        "exclusivo": false,
+        "id": "imu60yd9ivm9q",
+        "nome": "Tubarão",
+        "preco": 800,
+        "tipo": "brasao"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480764,
+        "data": {
+          "emoji": "⚡",
+          "src": ""
+        },
+        "desc": "Aposta rápido demais.",
+        "exclusivo": false,
+        "id": "imu60yd9ihur4",
+        "nome": "Raio",
+        "preco": 400,
+        "tipo": "brasao"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480765,
+        "data": {
+          "color": "#a8112a",
+          "estilo": "brilho"
+        },
+        "desc": "Um brilho leve no nome.",
+        "exclusivo": false,
+        "id": "imu60yd9ij7qd",
+        "nome": "Brilho discreto",
+        "preco": 600,
+        "tipo": "moldura"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480766,
+        "data": {
+          "color": "#c9a227",
+          "estilo": "aura"
+        },
+        "desc": "Ninguém ignora.",
+        "exclusivo": false,
+        "id": "imu60yd9ieixs",
+        "nome": "Aura dourada",
+        "preco": 1400,
+        "tipo": "moldura"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480767,
+        "data": {
+          "color": "#00ffc8",
+          "estilo": "pulso"
+        },
+        "desc": "O nome pisca devagar.",
+        "exclusivo": false,
+        "id": "imu60yd9iz0ws",
+        "nome": "Pulso neon",
+        "preco": 1200,
+        "tipo": "moldura"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480768,
+        "data": {
+          "color": "#a8112a",
+          "estilo": "caixa"
+        },
+        "desc": "Nome dentro de um quadro.",
+        "exclusivo": false,
+        "id": "imu60yd9iz28q",
+        "nome": "Moldura da casa",
+        "preco": 800,
+        "tipo": "moldura"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480769,
+        "data": {
+          "color": "#a8112a",
+          "estilo": "destaque"
+        },
+        "desc": "Barra colorida nas suas falas.",
+        "exclusivo": false,
+        "id": "imu60yd9ik3ep",
+        "nome": "Fala marcada",
+        "preco": 500,
+        "tipo": "efeito"
+      },
+      {
+        "ativo": true,
+        "createdAt": 1789679480770,
+        "data": {
+          "color": "#c9a227",
+          "estilo": "ouro"
+        },
+        "desc": "Suas falas brilham no chat.",
+        "exclusivo": false,
+        "id": "imu60yd9i2lj5",
+        "nome": "Fala dourada",
+        "preco": 1500,
+        "tipo": "efeito"
+      }
+    ]
+  }
+}
+

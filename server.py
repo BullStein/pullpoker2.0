@@ -2,11 +2,19 @@
 """
 Host do Salão de Apostas.
 Servidor HTTP simples (só biblioteca padrão) que:
-  - serve as páginas (mesa, loja, perfil, painel) na raiz
-  - guarda o estado do jogo em casino_state.json
+  - serve as páginas (mesa, jogos, loja, perfil, painel, eventos) na raiz
+  - guarda o estado do jogo (apostas, chat, loja, corrida, roleta...) em
+    casino_state.json
+  - guarda CONTAS/USUÁRIOS separados em casino_users.json, pra dar pra
+    fazer backup/restaurar só as contas sem mexer no resto
   - guarda a configuração ajustável (caça-níquel, pontos grátis, custo
-    da aposta) em casino_config.json, separada do estado
-  - expõe GET/POST /api/state  e  GET/POST /api/config
+    da aposta) em casino_config.json
+  - expõe GET/POST /api/state, /api/users e /api/config
+
+Se este servidor for iniciado numa pasta que já tinha um casino_state.json
+do formato antigo (com "users" dentro dele), os usuários são migrados
+automaticamente pra casino_users.json na primeira vez que rodar — nada
+se perde.
 
 Uso:
     python3 server.py            # porta 8000
@@ -21,18 +29,37 @@ import threading
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(DIR, "casino_state.json")
+USERS_FILE = os.path.join(DIR, "casino_users.json")
 CONFIG_FILE = os.path.join(DIR, "casino_config.json")
 LOCK = threading.Lock()
 
 DEFAULT_STATE = {
-    "users": {}, "bets": [], "chat": [], "banned": [],
-    "settings": {
-        "startBalance": 500,
-        "closed": {"loja": False, "apostas": False, "cacaniquel": False, "cavalos": False}
-    },
+    "bets": [], "chat": [], "announcements": [],
+    "settings": {"startBalance": 500},
     "shop": {"colors": [], "tags": [], "crests": [], "avatars": [], "backgrounds": []},
-    "announcements": [],
-    "events": []
+    "horseRace": {"status": "fechada", "horses": [], "wagers": [], "startedAt": None,
+                  "bettingEndsAt": None, "startedAtRun": None, "raceEndsAt": None,
+                  "winnerId": None, "potPaid": False},
+    "roulette": {"phase": "apostas", "cycleStartedAt": None, "bettingEndsAt": None,
+                 "spinEndsAt": None, "wagers": [], "resultNumber": None, "potPaid": False,
+                 "history": []},
+    "locks": {"shop": False, "bets": False, "slot": False, "horses": False, "roulette": False},
+    "eventLog": [], "seedVersion": 0
+}
+
+DEFAULT_USERS = {
+    "users": {
+        "casa": {
+            "username": "Casa",
+            "passwordHash": "08d100b70b035a80261896d617f2b2885f69f4282f437b7246939f8a08313b9f",
+            "isAdmin": True, "hidden": True, "balance": 0, "createdAt": 1789592518683,
+            "lastBonus": 0, "lastSpin": 0,
+            "owned": {"colors": [], "tags": [], "crests": [], "avatars": [], "backgrounds": []},
+            "equipped": {"color": None, "tag": None, "crest": None, "avatar": None, "background": None},
+            "customAvatarData": None
+        }
+    },
+    "banned": []
 }
 
 DEFAULT_CONFIG = {
@@ -62,6 +89,28 @@ def save_json(path, data):
     os.replace(tmp, path)
 
 
+def migrate_legacy_users_if_needed():
+    """Instalações antigas guardavam 'users' e 'banned' dentro do
+    casino_state.json. Se acharmos isso e ainda não existir um
+    casino_users.json, migramos uma vez só, sem perder nada."""
+    if os.path.exists(USERS_FILE):
+        return
+    if not os.path.exists(STATE_FILE):
+        return
+    legacy = load_json(STATE_FILE, {})
+    if "users" not in legacy:
+        return
+    users_payload = {
+        "users": legacy.get("users", {}),
+        "banned": legacy.get("banned", [])
+    }
+    save_json(USERS_FILE, users_payload)
+    legacy.pop("users", None)
+    legacy.pop("banned", None)
+    save_json(STATE_FILE, legacy)
+    print("[salao] Migrado: usuários movidos de casino_state.json para casino_users.json")
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIR, **kwargs)
@@ -75,10 +124,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _read_json_body(self):
+        length = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(length) if length else b"{}"
+        return json.loads(raw.decode("utf-8"))
+
     def do_GET(self):
         if self.path == "/api/state":
             with LOCK:
                 data = load_json(STATE_FILE, DEFAULT_STATE)
+            self._json(data)
+            return
+        if self.path == "/api/users":
+            with LOCK:
+                data = load_json(USERS_FILE, DEFAULT_USERS)
             self._json(data)
             return
         if self.path == "/api/config":
@@ -92,25 +151,34 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == "/api/state":
-            length = int(self.headers.get("Content-Length", 0))
-            raw = self.rfile.read(length) if length else b"{}"
             try:
-                data = json.loads(raw.decode("utf-8"))
+                data = self._read_json_body()
             except json.JSONDecodeError:
                 self._json({"error": "json invalido"}, 400)
                 return
-            if not isinstance(data, dict) or "users" not in data or "bets" not in data:
+            if not isinstance(data, dict) or "bets" not in data:
                 self._json({"error": "formato invalido"}, 400)
                 return
             with LOCK:
                 save_json(STATE_FILE, data)
             self._json({"ok": True})
             return
-        if self.path == "/api/config":
-            length = int(self.headers.get("Content-Length", 0))
-            raw = self.rfile.read(length) if length else b"{}"
+        if self.path == "/api/users":
             try:
-                data = json.loads(raw.decode("utf-8"))
+                data = self._read_json_body()
+            except json.JSONDecodeError:
+                self._json({"error": "json invalido"}, 400)
+                return
+            if not isinstance(data, dict) or "users" not in data:
+                self._json({"error": "formato invalido"}, 400)
+                return
+            with LOCK:
+                save_json(USERS_FILE, data)
+            self._json({"ok": True})
+            return
+        if self.path == "/api/config":
+            try:
+                data = self._read_json_body()
             except json.JSONDecodeError:
                 self._json({"error": "json invalido"}, 400)
                 return
@@ -145,8 +213,11 @@ def get_lan_ip():
 
 def main():
     port = int(os.environ.get("PORT", 8000))
+    migrate_legacy_users_if_needed()
     if not os.path.exists(STATE_FILE):
         save_json(STATE_FILE, DEFAULT_STATE)
+    if not os.path.exists(USERS_FILE):
+        save_json(USERS_FILE, DEFAULT_USERS)
     if not os.path.exists(CONFIG_FILE):
         save_json(CONFIG_FILE, DEFAULT_CONFIG)
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
@@ -159,6 +230,7 @@ def main():
         print("  Não consegui detectar o IP da rede local — rode 'ipconfig' (Windows)")
         print("  ou 'ifconfig' / 'ip a' (Mac/Linux) e use o IPv4 da sua rede Wi-Fi/LAN.")
     print(f"  Estado salvo em: {STATE_FILE}")
+    print(f"  Usuários salvos em: {USERS_FILE}")
     print(f"  Config salva em: {CONFIG_FILE}")
     try:
         server.serve_forever()

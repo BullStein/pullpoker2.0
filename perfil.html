@@ -15,7 +15,6 @@
 <script>
 let pwError = '';
 let pwOk = '';
-let uploadError = '';
 
 function render(){
   const app = document.getElementById('app');
@@ -36,7 +35,7 @@ function render(){
 const CATS = [
   ['avatars','Foto de perfil'],
   ['colors','Cores de nome'],
-  ['backgrounds','Fundo de nome (chat)'],
+  ['backgrounds','Fundo do nome'],
   ['tags','Tags'],
   ['crests','Brasões']
 ];
@@ -44,7 +43,6 @@ const CATS = [
 function renderProfile(){
   const user = state.users[me.key];
   const eqFieldFor = { colors:'color', tags:'tag', crests:'crest', avatars:'avatar', backgrounds:'background' };
-  const ownsCustomUpload = (user.owned.avatars||[]).includes(CUSTOM_AVATAR_ID);
 
   const blocks = CATS.map(([cat,label])=>{
     const owned = user.owned[cat] || [];
@@ -54,34 +52,42 @@ function renderProfile(){
     const ownedItems = shopItems.filter(it=> owned.includes(it.id));
     const pillHTML = ownedItems.length ? ownedItems.map(it=>{
       const isEq = equippedId===it.id;
-      const isCustomUpload = it.id === CUSTOM_AVATAR_ID;
-      const label2 = (cat==='colors'||cat==='backgrounds') ? `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${it.hex};margin-right:4px;"></span>${escapeHTML(it.label)}`
-        : (cat==='crests'||cat==='avatars') ? `${isCustomUpload?'📷':it.emoji} ${escapeHTML(it.label)}`
-        : escapeHTML(it.label);
+      const swatch = (cat==='colors'||cat==='backgrounds') ? `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${it.hex};margin-right:4px;"></span>` : '';
+      const emojiPart = (cat==='crests'||cat==='avatars') && it.emoji ? `${it.emoji} ` : '';
+      const label2 = `${swatch}${emojiPart}${escapeHTML(it.label)}`;
       return `<div class="owned-pill ${isEq?'equipped':''}">${label2} <button data-equip="${cat}" data-id="${escapeAttr(it.id)}">${isEq?'tirar':'usar'}</button></div>`;
     }).join('') : `<span style="color:var(--muted);font-size:12.5px;">Nada comprado ainda — <a href="loja.html">visite a loja</a>.</span>`;
-
-    const uploadBlock = (cat==='avatars' && ownsCustomUpload) ? `
-      <div class="upload-row">
-        <div class="admin-note" style="margin-bottom:6px;">Você comprou a foto customizada — envie sua imagem (ela é redimensionada automaticamente):</div>
-        <input type="file" accept="image/*" id="avatarUploadInput" />
-        ${uploadError ? `<div class="gate-error">${escapeHTML(uploadError)}</div>` : ''}
-        ${user.customAvatarData ? `<div style="margin-top:8px;"><img src="${user.customAvatarData}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--brass-dim);" /></div>` : ''}
-      </div>
-    ` : '';
-
     return `
       <div class="card side-card">
         <h3>${label}</h3>
         <div class="owned-grid">${pillHTML}</div>
-        ${uploadBlock}
       </div>
     `;
   }).join('');
 
+  const ownsCustomPhoto = (user.owned.avatars||[]).includes('custom_photo');
+  const customEquipped = user.equipped.avatar === 'custom_photo';
+  const photoCard = `
+    <div class="card side-card">
+      <h3>Foto personalizada</h3>
+      ${ownsCustomPhoto ? `
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+          <div class="profile-avatar" style="width:56px;height:56px;font-size:26px;">${user.customAvatarData ? `<img src="${user.customAvatarData}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />` : '📷'}</div>
+          <div style="font-size:12px;color:var(--dim);">${user.customAvatarData ? 'Sua foto está salva.' : 'Você ainda não enviou uma foto.'}</div>
+        </div>
+        <input type="file" id="photoFile" accept="image/*" style="margin-bottom:8px;" />
+        <div class="admin-row">
+          <button class="submit-bet" id="uploadPhotoBtn" style="flex:1;">Enviar foto</button>
+          ${user.customAvatarData ? `<button class="ibtn ${customEquipped?'equipped':'equip'}" id="equipPhotoBtn" style="flex:1;">${customEquipped?'Equipada':'Usar como avatar'}</button>` : ''}
+        </div>
+        <div class="admin-note">A foto é recortada em quadrado e comprimida — fica só neste jogo, na sua conta.</div>
+      ` : `<div style="font-size:12.5px;color:var(--dim);">Item comprável na <a href="loja.html">loja</a>, aba "Foto de perfil" — 10.000 pontos.</div>`}
+    </div>
+  `;
+
   return `
     <div class="profile-head">
-      ${avatarBadgeHTML(user.username, 76)}
+      <div class="profile-avatar">${avatarContentHTML(user.username)}</div>
       <div>
         <h1 class="display">${nameHTML(user.username)}</h1>
         <div class="tagline">${fmt(user.balance)} pontos ${user.isAdmin ? '· conta da casa (fora do ranking)' : '· na mesa desde '+fmtDate(user.createdAt||Date.now())}</div>
@@ -90,6 +96,7 @@ function renderProfile(){
     <div class="profile-grid">
       <div>${blocks}</div>
       <div>
+        ${photoCard}
         <div class="card side-card">
           <h3>Trocar senha</h3>
           <div class="form-row"><input type="password" id="curPw" placeholder="Senha atual" /></div>
@@ -107,6 +114,30 @@ function bindProfile(){
   document.querySelectorAll('[data-equip]').forEach(b=>{
     b.onclick = async ()=>{ await equipItem(b.dataset.equip, b.dataset.id); render(); };
   });
+  const uploadBtn = document.getElementById('uploadPhotoBtn');
+  if(uploadBtn) uploadBtn.onclick = async ()=>{
+    const fileInput = document.getElementById('photoFile');
+    const file = fileInput && fileInput.files && fileInput.files[0];
+    if(!file){ toast('Escolha uma imagem primeiro'); return; }
+    if(file.size > 8*1024*1024){ toast('Imagem muito grande (máx. 8MB)'); return; }
+    uploadBtn.disabled = true;
+    try{
+      const dataUrl = await resizeImageToDataURL(file, 160);
+      await loadState();
+      const u = state.users[me.key];
+      u.customAvatarData = dataUrl;
+      u.equipped.avatar = 'custom_photo';
+      await saveState();
+      toast('Foto salva e equipada');
+      render();
+    }catch(err){
+      console.error(err);
+      toast('Não consegui processar essa imagem');
+      uploadBtn.disabled = false;
+    }
+  };
+  const equipPhotoBtn = document.getElementById('equipPhotoBtn');
+  if(equipPhotoBtn) equipPhotoBtn.onclick = async ()=>{ await equipItem('avatars','custom_photo'); render(); };
   const btn = document.getElementById('changePwBtn');
   if(btn) btn.onclick = async ()=>{
     const cur = document.getElementById('curPw').value;
@@ -120,26 +151,6 @@ function bindProfile(){
       console.error(err);
       pwError = 'Algo deu errado ao trocar a senha. Veja o console do navegador.';
       pwOk=''; render();
-    }
-  };
-  const uploadInput = document.getElementById('avatarUploadInput');
-  if(uploadInput) uploadInput.onchange = async ()=>{
-    const file = uploadInput.files[0];
-    if(!file) return;
-    try{
-      const dataUrl = await resizeImageToDataURL(file, 220);
-      await loadState();
-      const u = state.users[me.key];
-      u.customAvatarData = dataUrl;
-      u.equipped.avatar = CUSTOM_AVATAR_ID;
-      await saveState();
-      uploadError = '';
-      toast('Foto atualizada');
-      render();
-    }catch(err){
-      console.error(err);
-      uploadError = 'Não consegui ler essa imagem. Tente outro arquivo.';
-      render();
     }
   };
 }

@@ -24,122 +24,141 @@ Se ninguem mais conseguir acessar:
 
 CONTAS E SENHAS
 ---------------
-- Agora todo mundo cria uma conta com nome + senha (aba "Criar conta"
-  na tela inicial). Login fica salvo no navegador de cada pessoa.
+- Todo mundo cria uma conta com nome + senha (aba "Criar conta" na
+  tela inicial). Login fica salvo no navegador de cada pessoa.
 - A conta do host (admin) ja vem pronta:
        usuario: Casa
        senha:   vip777
   Essa conta fica FORA do ranking (nao aparece no placar) e o nome
   dela aparece com um efeito dourado brilhante no chat.
-  TROQUE ESSA SENHA assim que possivel: entre como "Casa" e va em
-  Perfil > Trocar senha.
+  TROQUE ESSA SENHA assim que possivel — ou entre como "Casa" e va em
+  Perfil > Trocar senha, ou troque pelo proprio Painel (ve abaixo).
 
 PAGINAS
 -------
-- index.html   -> Mesa: apostas, corridas de cavalo, chat, anuncios
-                  no topo, pontos gratis e caca-niquel
-- loja.html    -> Loja: cores de nome, tags, brasoes, fundo de nome
-                  no chat e fotos de perfil (inclusive customizada)
-- perfil.html  -> Perfil: itens comprados, trocar avatar (ou enviar
-                  foto propria), trocar senha
-- eventos.html -> Log de eventos / bugs / avisos da mesa
-- painel.html  -> Painel do host (so aparece/funciona para a conta admin)
+- index.html  -> Mesa: apostas, chat, pontos gratis, caca-niquel,
+                 cartazes e um resumo da Roleta automatica
+- jogos.html  -> Jogos: Corrida de Cavalos e Roleta
+- loja.html   -> Loja: cores, tags, brasoes, fotos de perfil e fundos
+                 de nome
+- perfil.html -> Perfil: itens comprados, avatar, foto propria,
+                 trocar senha
+- eventos.html-> Log de eventos (contas, apostas, corridas, roleta,
+                 acoes do host)
+- painel.html -> Painel do host (so aparece/funciona para a conta
+                 admin)
 
 O QUE O HOST PODE FAZER (painel.html)
 --------------------------------------
-- Dar pontos ilimitados ou zerar o saldo de qualquer jogador
-- Definir o saldo inicial dos novos jogadores
-- Publicar anuncios em destaque no TOPO da Mesa (separado do chat)
-  e tambem enviar mensagens no chat como "A Casa"
-- Banir/desbanir jogadores pelo nome
-- Limpar o chat inteiro / cancelar todas as apostas abertas
-- FECHAR/REABRIR, individualmente: a Loja, as Apostas (opcoes fixas
-  e palpite livre), o Caca-niquel e as Corridas de cavalo
-- Baixar um BACKUP completo (usuarios, saldos, apostas, loja) em
-  arquivo .json, e importar um backup depois para restaurar tudo
-- Adicionar ou remover itens da loja (cores, tags, brasoes, fundos
-  de nome e fotos de perfil), escolhendo emoji/cor para cada um
-- Ajustar as REGRAS DO CASSINO (ficam num arquivo separado,
-  casino_config.json):
-    - custo em pontos para abrir uma aposta (padrao: 20)
-    - valor e intervalo dos pontos gratis
-    - tempo de espera do caca-niquel e o quanto cada resultado paga
-      (tres 7, tres iguais, duas iguais, nada)
+- Ver TODAS as contas criadas, cada uma com sua propria caixa de
+  controle: dar pontos, tirar pontos, zerar saldo, definir uma nova
+  senha na mao, e banir/desbanir — sem precisar digitar o nome, tem
+  um campo de busca pra achar rapido numa mesa com muita gente.
+- Definir o saldo inicial dos novos jogadores.
+- Enviar anuncios no chat como "A Casa".
+- Publicar cartazes/eventos que aparecem no topo da Mesa (com ou sem
+  data de validade).
+- Limpar o chat inteiro / cancelar todas as apostas abertas.
+- Fechar (trancar) loja, apostas, caca-niquel, corrida de cavalos e
+  roleta, um por um ou tudo de uma vez com o botao "Fechar tudo".
+  Fechar nao cancela nada em andamento, so impede coisa nova de
+  comecar.
+- Adicionar ou remover itens da loja (cores, tags, brasoes, fotos de
+  perfil e fundos de nome), escolhendo emoji para os que usam icone.
+- Ajustar as REGRAS DO CASSINO (casino_config.json): custo da aposta,
+  valor/intervalo dos pontos gratis, tempo de espera do caca-niquel e
+  quanto cada resultado paga.
+- Baixar um BACKUP completo (.json) com contas, saldos, apostas,
+  chat, loja e configs — e restaurar a mesa inteira a partir de um
+  arquivo desses.
+- Baixar/restaurar um backup SO DAS CONTAS (o casino_users.json —
+  usuarios, senhas, saldos e banidos), sem mexer em apostas, loja ou
+  chat. Bom pra mandar so as contas pra alguem, ou pra guardar um
+  backup leve.
 
-APOSTAS
--------
+LOG DE EVENTOS (eventos.html)
+------------------------------
+Uma pagina com o historico do que aconteceu na mesa: contas criadas,
+apostas abertas/travadas/encerradas, corridas de cavalo, giros da
+roleta, banimentos, mudancas de trava, restauracoes de backup etc.
+Da pra filtrar por tipo. Funciona como um "log de bugs/eventos" pra
+saber o que rolou mesmo se voce nao estava olhando na hora.
+
+APOSTAS DA MESA
+----------------
 - Custam pontos para abrir (valor definido pelo host).
-- Tres tipos: "opcoes fixas" (o criador define as opcoes na hora e
-  elas ficam travadas — ninguem pode mais adicionar opcoes depois),
-  "palpite livre" (cada um escreve o proprio palpite) e "corrida de
-  cavalos" (ver abaixo).
-- Mostram quem criou e a data/hora de expiracao (o criador escolhe
-  o prazo ao abrir: de 1 hora ate sem expiracao, exceto corrida de
-  cavalos que sempre precisa de um horario).
-- Opcionalmente, apostas de opcoes fixas/palpite livre podem ter um
-  "limite para apostar" (tempo de voto): depois dele ninguem mais
-  aposta, mas a aposta continua aberta ate o anfitriao encerrar.
-- Se a aposta expirar sem ser encerrada, os pontos apostados sao
-  devolvidos automaticamente a todos.
+- Mostram quem criou e a data/hora em que travam (o criador escolhe
+  o prazo ao abrir: de 1 hora ate sem expiracao).
+- Quando o prazo acaba, a aposta TRAVA — ninguem mais consegue
+  apostar nela, mas ela continua na mesa esperando o host (ou quem
+  criou) escolher o resultado e pagar. Os pontos ja apostados NAO sao
+  devolvidos automaticamente; so voltam se alguem cancelar a aposta
+  na mao.
+- Cada opcao mostra a porcentagem do pote (numero + barrinha dourada)
+  e, embaixo, quem apostou nela: aparece o avatar de quem tem uma
+  foto de perfil equipada, e o nome de quem nao tem.
+  - O valor do pote fica mais dourado e MAIOR conforme mais gente
+    aposta — pote grande chama mais atencao.
+- Apostas de "opcoes fixas" NAO podem mais ganhar opcoes novas depois
+  de abertas — a lista fica travada no que foi criado.
 - O criador da aposta (ou o host) pode excluir uma aposta ja
-  encerrada/expirada da mesa (botao "Excluir postagem").
+  encerrada da mesa (botao "Excluir postagem").
 - Mensagens do chat tambem podem ser excluidas: cada um apaga as
   suas, e o host pode apagar qualquer uma.
 
-CORRIDA DE CAVALOS
-------------------
-- Qualquer jogador pode abrir uma corrida na Mesa (tipo "Corrida de
-  cavalos" ao abrir aposta), definindo os nomes dos cavalos (minimo
-  2) e o horario em que a corrida acontece.
-- Ate esse horario todo mundo aposta em um cavalo. Quando o horario
-  chega, um cavalo e sorteado automaticamente e quem apostou nele
-  divide o pote — nao precisa de ninguem clicar em nada.
-- O host pode fechar as corridas de cavalo pelo Painel a qualquer
-  momento (impede novas corridas e novas apostas nas existentes).
+CORRIDA DE CAVALOS (jogos.html)
+--------------------------------
+Fica isolada da Mesa — só avança enquanto alguém está na página
+Jogos, sem misturar aviso nenhum no chat da Mesa (só entra no Log de
+Eventos). O host escolhe quantos cavalos (4/6/8) e por quanto tempo
+as apostas ficam abertas (15s a 3min — nada de 5 minutos). Cada
+jogador aposta pontos num cavalo enquanto a janela estiver aberta;
+quando o tempo acaba, a corrida roda sozinha (~8s, com largada e
+tudo) e o pote e dividido, proporcional ao valor apostado, entre quem
+apostou no cavalo vencedor. Cada cavalo tem uma bolinha colorida
+("jóquei") propria pra dar pra distinguir de longe.
+
+ROLETA (jogos.html)
+--------------------
+Gira sozinha, sem o host precisar fazer nada: abre apostas, fecha,
+gira e paga automaticamente, a cada ~5 minutos, direto — a Mesa
+mostra um resuminho dela (fase atual + ultimos numeros) com um link
+pra apostar. Aceita aposta em numero cheio (paga 35x), cor
+vermelho/preto, par/impar, ou 1-18/19-36 (essas tres pagam o dobro).
 
 FOTO DE PERFIL
 --------------
-A "foto de perfil" padrao e um icone/emoji comprado na loja (aba
-"Foto de perfil") e equipado em Perfil. Aparece no chat, no ranking
-e no cabecalho.
-Tambem existe uma opcao de FOTO CUSTOMIZADA (10.000 pontos): depois
-de comprar esse item na loja, va em Perfil e envie sua propria
-imagem — ela e redimensionada automaticamente e guardada no
-casino_state.json (nao sai da sua maquina/rede).
-
-FUNDO DE NOME NO CHAT
-----------------------
-Na loja, aba "Fundo de nome", da pra comprar um fundo colorido que
-aparece atras do seu nome no chat, no ranking e nas apostas.
-
-EVENTOS / LOG DE BUGS
-----------------------
-A pagina eventos.html e um mural separado do chat para registrar
-bugs, avisos e melhorias encontradas na mesa. Qualquer jogador pode
-registrar um evento; cada um apaga o que registrou, e o host pode
-apagar qualquer um.
-
-BACKUP
-------
-No Painel, em "Backup de dados", da pra baixar um arquivo .json com
-tudo (usuarios, saldos, apostas, loja, config de fechamento) e
-importar esse arquivo depois para restaurar exatamente esse estado
-(por exemplo, ao trocar de computador ou depois de testar algo).
+Duas opcoes na loja, aba "Foto de perfil":
+- icones prontos (emoji), como antes; ou
+- "Foto personalizada" por 10.000 pontos: depois de comprada, o
+  jogador sobe a propria foto em Perfil (e recortada em quadrado e
+  comprimida antes de salvar).
+So quem tem uma dessas equipada aparece com avatar na lista de quem
+apostou em cada opcao — quem nao tem aparece so pelo nome.
 
 ARQUIVOS
 --------
-- server.py           -> servidor (so biblioteca padrao do Python,
-                          detecta e mostra o IP da rede automaticamente)
-- app.js               -> logica compartilhada por todas as paginas
-                          (login, estado, loja, formatacao)
-- styles.css           -> visual (tema cassino oxblood + latao)
-- index.html, loja.html, perfil.html, painel.html -> as 4 paginas
-- casino_state.json     -> dados salvos (contas, senhas com hash,
-                            apostas, chat, banidos, loja). Ja vem com
-                            a conta "Casa", uma aposta de exemplo e a
-                            loja com itens prontos. Pode apagar para
-                            zerar tudo (menos a conta Casa, que e
-                            recriada se o arquivo nao existir).
-- casino_config.json    -> as regras ajustaveis do cassino (custo de
+- server.py            -> servidor (so biblioteca padrao do Python,
+                           detecta e mostra o IP da rede automaticamente)
+- app.js                -> logica compartilhada por todas as paginas
+                           (login, estado, loja, jogos, formatacao)
+- styles.css            -> visual (tema cassino oxblood + latao)
+- index.html, jogos.html, loja.html, perfil.html, painel.html,
+  eventos.html           -> as 6 paginas
+- casino_state.json      -> dados do jogo: apostas, chat, loja,
+                            corrida, roleta, cartazes, travas e o
+                            log de eventos.
+- casino_users.json      -> contas separadas: usuarios, senhas (com
+                            hash) e banidos. Fica num arquivo a parte
+                            de proposito, pra dar pra fazer backup ou
+                            restaurar so as contas (pelo Painel), sem
+                            mexer no resto do jogo.
+- casino_config.json     -> as regras ajustaveis do cassino (custo de
                             aposta, pontos gratis, caca-niquel).
                             Editavel pelo painel do host, ou na mao.
+
+Se voce ja tinha uma instalacao ANTIGA (de antes do casino_users.json
+existir), pode ficar tranquilo: na primeira vez que rodar
+"python3 server.py" nessa pasta, o servidor migra sozinho as contas
+que estavam dentro do casino_state.json pro casino_users.json novo —
+ninguem perde conta nem pontos.

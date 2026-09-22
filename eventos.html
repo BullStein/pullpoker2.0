@@ -13,7 +13,7 @@
 <div id="toast"></div>
 <script src="app.js"></script>
 <script>
-let newTipo = 'bug';
+let filterType = 'todos';
 
 function render(){
   const app = document.getElementById('app');
@@ -25,80 +25,44 @@ function render(){
     bindNav();
     return;
   }
-  app.innerHTML = navHTML('eventos.html') + renderEvents();
-  bindEvents();
-  bindNav();
+  app.innerHTML = navHTML('eventos.html') + renderLog();
+  bindLog();
 }
 
-const TIPO_LABEL = { bug:'🐞 Bug', aviso:'⚠️ Aviso', melhoria:'✨ Melhoria', info:'ℹ️ Info' };
+function renderLog(){
+  const all = [...(state.eventLog||[])].reverse();
+  const types = Array.from(new Set(all.map(e=> e.type)));
+  const filtered = filterType==='todos' ? all : all.filter(e=> e.type===filterType);
 
-function renderEvents(){
-  const user = state.users[me.key];
-  const list = (state.events||[]).slice().sort((a,b)=> b.ts - a.ts);
-
-  const rows = list.length ? list.map(ev=>{
-    const canDelete = user.isAdmin || ev.autor===me.username;
-    return `
-      <div class="bet event-item">
-        <div class="bet-top">
-          <div>
-            <div class="bet-title">${TIPO_LABEL[ev.tipo]||ev.tipo} — ${escapeHTML(ev.title)}</div>
-            <div class="bet-meta">
-              <span>relatado por ${nameHTML(ev.autor)}</span>
-              <span>${fmtDate(ev.ts)}</span>
-            </div>
-          </div>
-          ${canDelete ? `<button class="delete-bet" data-del-event="${ev.id}">Excluir</button>` : ''}
+  const rows = filtered.length ? filtered.map(e=> `
+    <div class="bet" style="padding:12px 16px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="status-tag aberta" style="border-color:var(--brass-dim);color:var(--brass-dim);">${escapeHTML(EVENT_LABELS[e.type]||e.type)}</span>
+          <span style="font-size:13px;color:var(--cream);">${escapeHTML(e.text)}</span>
         </div>
-        ${ev.desc ? `<div class="result-note" style="font-style:normal;">${escapeHTML(ev.desc)}</div>` : ''}
+        <span style="font-size:11px;color:var(--muted);white-space:nowrap;" class="mono">${fmtDate(e.ts)}</span>
       </div>
-    `;
-  }).join('') : '<div class="empty-state">Nenhum evento registrado ainda.</div>';
+      ${e.by ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">por ${escapeHTML(e.by)}</div>` : ''}
+    </div>
+  `).join('') : '<div class="empty-state">Nenhum evento registrado ainda.</div>';
 
   return `
-    <div class="admin-hero">
-      <h1 class="display">Eventos &amp; Log de bugs</h1>
-      <p>Registre bugs, avisos e melhorias encontradas na mesa. Fica registrado aqui, fora do chat.</p>
+    <div class="games-hero">
+      <h1 class="display">Log de Eventos</h1>
+      <p>Histórico do que aconteceu na mesa — contas, apostas, corridas, mudanças do host.</p>
     </div>
-    <div class="card new-bet-form">
-      <div class="row"><input type="text" id="evTitle" placeholder="Título curto do evento" maxlength="80" /></div>
-      <div class="row">
-        <div class="type-toggle">
-          ${Object.entries(TIPO_LABEL).map(([k,l])=> `<button data-tipo="${k}" class="${newTipo===k?'active':''}">${l}</button>`).join('')}
-        </div>
-      </div>
-      <div class="row"><input type="text" id="evDesc" placeholder="Descrição (opcional)" maxlength="300" /></div>
-      <button class="submit-bet" id="addEventBtn">Registrar evento</button>
+    <div class="shop-tabs">
+      <button class="shop-tab ${filterType==='todos'?'active':''}" data-filter="todos">Todos</button>
+      ${types.map(t=> `<button class="shop-tab ${filterType===t?'active':''}" data-filter="${t}">${escapeHTML(EVENT_LABELS[t]||t)}</button>`).join('')}
     </div>
     <div class="bet-list">${rows}</div>
   `;
 }
 
-function bindEvents(){
-  document.querySelectorAll('[data-tipo]').forEach(b=>{
-    b.onclick = ()=>{ newTipo = b.dataset.tipo; render(); };
-  });
-  document.getElementById('addEventBtn').onclick = async ()=>{
-    const title = document.getElementById('evTitle').value.trim();
-    const desc = document.getElementById('evDesc').value.trim();
-    if(!title){ toast('Dê um título ao evento'); return; }
-    await loadState();
-    if(!state.events) state.events = [];
-    state.events.push({ id: uid('ev_'), title, desc, tipo: newTipo, autor: me.username, ts: Date.now() });
-    if(state.events.length > 300) state.events = state.events.slice(-300);
-    await saveState();
-    toast('Evento registrado');
-    render();
-  };
-  document.querySelectorAll('[data-del-event]').forEach(b=>{
-    b.onclick = async ()=>{
-      if(!confirm('Excluir este evento?')) return;
-      const id = b.dataset.delEvent;
-      await loadState();
-      state.events = (state.events||[]).filter(ev=> ev.id!==id);
-      await saveState();
-      render();
-    };
+function bindLog(){
+  document.querySelectorAll('[data-filter]').forEach(b=>{
+    b.onclick = ()=>{ filterType = b.dataset.filter; render(); };
   });
 }
 
@@ -106,6 +70,7 @@ async function boot(){
   loadSession();
   await loadState();
   render();
+  setInterval(async ()=>{ await loadState(); if(sessionStillValid()) render(); }, 5000);
 }
 boot();
 </script>

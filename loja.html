@@ -33,8 +33,8 @@ function render(){
 
 function renderShop(){
   const user = state.users[me.key];
-  const shopClosed = !!(state.settings.closed && state.settings.closed.loja);
-  const tabs = [['colors','Cores de nome'],['tags','Tags'],['crests','Brasões'],['backgrounds','Fundo de nome'],['avatars','Foto de perfil']];
+  const shopLocked = state.locks && state.locks.shop;
+  const tabs = [['colors','Cores de nome'],['tags','Tags'],['crests','Brasões'],['avatars','Foto de perfil'],['backgrounds','Fundo do nome']];
   const items = state.shop[shopTab] || [];
   const owned = user.owned[shopTab] || [];
   const eqField = shopTab==='colors' ? 'color' : shopTab==='tags' ? 'tag' : shopTab==='avatars' ? 'avatar' : shopTab==='backgrounds' ? 'background' : 'crest';
@@ -44,25 +44,29 @@ function renderShop(){
     const isOwned = owned.includes(it.id);
     const isEquipped = equippedId === it.id;
     const canAfford = user.balance >= it.price;
-    const isCustomUpload = it.id === CUSTOM_AVATAR_ID;
-    const preview = (shopTab === 'colors' || shopTab === 'backgrounds')
-      ? `<div class="preview" style="background:${it.hex};"></div>`
-      : `<div class="preview emoji">${isCustomUpload ? '📷' : (it.emoji || '')}</div>`;
-    const previewFinal = shopTab==='tags' ? `<div class="label-tag">${escapeHTML(it.label)}</div>` : preview;
+    let preview;
+    if(shopTab === 'colors' || shopTab === 'backgrounds'){
+      preview = `<div class="preview" style="background:${it.hex};"></div>`;
+    } else if(shopTab === 'tags'){
+      preview = `<div class="label-tag">${escapeHTML(it.label)}</div>`;
+    } else if(it.custom){
+      preview = `<div class="preview premium">📷</div>`;
+    } else {
+      preview = `<div class="preview emoji">${it.emoji || ''}</div>`;
+    }
     let btn;
-    if(shopClosed && !isOwned){
-      btn = `<button class="ibtn locked" disabled>Loja fechada</button>`;
-    } else if(isOwned){
+    if(isOwned){
       btn = `<button class="ibtn ${isEquipped?'equipped':'equip'}" data-equip="${shopTab}" data-id="${escapeAttr(it.id)}">${isEquipped ? 'Equipado' : 'Equipar'}</button>`;
     } else {
-      btn = `<button class="ibtn ${canAfford?'buy':'locked'}" data-buy="${shopTab}" data-id="${escapeAttr(it.id)}" ${canAfford?'':'disabled'}>Comprar</button>`;
+      const disabled = shopLocked || !canAfford;
+      btn = `<button class="ibtn ${(!shopLocked && canAfford)?'buy':'locked'}" data-buy="${shopTab}" data-id="${escapeAttr(it.id)}" ${disabled?'disabled':''}>${shopLocked?'Loja fechada':'Comprar'}</button>`;
     }
     return `<div class="shop-item">
-      ${previewFinal}
+      ${preview}
       <div class="info">
         <div class="iname">${escapeHTML(it.label)}</div>
         <div class="iprice mono">${it.price>0 ? fmt(it.price)+' pts' : 'grátis'}</div>
-        ${isCustomUpload ? `<div class="admin-note" style="margin-top:-2px;">Envie sua própria foto em "Perfil" depois de comprar</div>` : ''}
+        ${it.custom ? `<div style="font-size:11px;color:var(--muted);">envie a foto na página Perfil</div>` : ''}
       </div>
       ${btn}
     </div>`;
@@ -71,8 +75,8 @@ function renderShop(){
   return `
     <div class="shop-hero">
       <h1 class="display">A Loja</h1>
-      <p>Gaste seus pontos em estilo — cores, tags, brasões, fundo de nome no chat e uma foto de perfil pra chamar de sua.</p>
-      ${shopClosed ? `<div class="closed-banner">A loja está fechada pelo host. Você ainda pode equipar o que já comprou.</div>` : ''}
+      <p>Gaste seus pontos em estilo — cores, tags, brasões e uma foto de perfil pra chamar de sua.</p>
+      ${shopLocked ? `<div class="gate-error" style="margin-top:8px;">A loja está fechada pelo host no momento — dá pra equipar o que você já tem, mas não pra comprar coisa nova.</div>` : ''}
     </div>
     <div class="shop-tabs">
       ${tabs.map(([k,label])=> `<button class="shop-tab ${shopTab===k?'active':''}" data-shoptab="${k}">${label}</button>`).join('')}
@@ -86,7 +90,10 @@ function bindShop(){
     b.onclick = ()=>{ shopTab = b.dataset.shoptab; render(); };
   });
   document.querySelectorAll('[data-buy]').forEach(b=>{
-    b.onclick = async ()=>{ await buyItem(b.dataset.buy, b.dataset.id); render(); };
+    b.onclick = async ()=>{
+      if(state.locks && state.locks.shop){ toast('Loja fechada pelo host'); return; }
+      await buyItem(b.dataset.buy, b.dataset.id); render();
+    };
   });
   document.querySelectorAll('[data-equip]').forEach(b=>{
     b.onclick = async ()=>{ await equipItem(b.dataset.equip, b.dataset.id); render(); };
