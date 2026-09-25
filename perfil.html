@@ -27,9 +27,10 @@ function render(){
     bindNav();
     return;
   }
-  app.innerHTML = navHTML('perfil.html') + renderProfile();
+  app.innerHTML = navHTML('perfil.html') + leftDockHTML() + rightDockHTML() + renderProfile();
   bindProfile();
   bindNav();
+  bindMiniSlot();
 }
 
 const CATS = [
@@ -67,6 +68,21 @@ function renderProfile(){
 
   const ownsCustomPhoto = (user.owned.avatars||[]).includes('custom_photo');
   const customEquipped = user.equipped.avatar === 'custom_photo';
+  const stats = user.stats || { lifetimeWon:0, lifetimeLost:0 };
+  const net = stats.lifetimeWon - stats.lifetimeLost;
+  const houseTake = typeof state.houseTake==='number' ? state.houseTake : 0;
+  const statusCard = `
+    <div class="card side-card">
+      <h3>Status geral da conta</h3>
+      <div class="owned-grid" style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;"><span style="color:var(--dim);">Saldo atual</span><span class="mono">${fmt(user.balance)} pts</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;"><span style="color:var(--dim);">Ganho na vida da conta</span><span class="mono" style="color:var(--good);">+${fmt(stats.lifetimeWon)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;"><span style="color:var(--dim);">Perdido na vida da conta</span><span class="mono" style="color:var(--bad);">-${fmt(stats.lifetimeLost)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;border-top:1px solid var(--line);padding-top:8px;"><span style="color:var(--dim);">Líquido</span><span class="mono" style="color:${net>=0?'var(--good)':'var(--bad)'};">${net>=0?'+':''}${fmt(net)}</span></div>
+      </div>
+      <div class="admin-note" style="margin-top:10px;">Conta pontos ganhos/perdidos em apostas, roleta, corrida, blackjack e caça-níquel. Banca da casa no momento: <span class="mono">${fmt(houseTake)} pts</span>.</div>
+    </div>
+  `;
   const photoCard = `
     <div class="card side-card">
       <h3>Foto personalizada</h3>
@@ -96,6 +112,7 @@ function renderProfile(){
     <div class="profile-grid">
       <div>${blocks}</div>
       <div>
+        ${statusCard}
         ${photoCard}
         <div class="card side-card">
           <h3>Trocar senha</h3>

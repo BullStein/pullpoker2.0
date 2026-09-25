@@ -52,8 +52,9 @@ O QUE O HOST PODE FAZER (painel.html)
 --------------------------------------
 - Ver TODAS as contas criadas, cada uma com sua propria caixa de
   controle: dar pontos, tirar pontos, zerar saldo, definir uma nova
-  senha na mao, e banir/desbanir — sem precisar digitar o nome, tem
-  um campo de busca pra achar rapido numa mesa com muita gente.
+  senha na mao, banir/desbanir, e EXCLUIR a conta de vez — sem
+  precisar digitar o nome, tem um campo de busca pra achar rapido
+  numa mesa com muita gente.
 - Definir o saldo inicial dos novos jogadores.
 - Enviar anuncios no chat como "A Casa".
 - Publicar cartazes/eventos que aparecem no topo da Mesa (com ou sem
@@ -67,7 +68,8 @@ O QUE O HOST PODE FAZER (painel.html)
   perfil e fundos de nome), escolhendo emoji para os que usam icone.
 - Ajustar as REGRAS DO CASSINO (casino_config.json): custo da aposta,
   valor/intervalo dos pontos gratis, tempo de espera do caca-niquel e
-  quanto cada resultado paga.
+  quanto cada resultado paga, aposta minima/duracao da roleta, e
+  aposta minima da corrida de cavalos.
 - Baixar um BACKUP completo (.json) com contas, saldos, apostas,
   chat, loja e configs — e restaurar a mesa inteira a partir de um
   arquivo desses.
@@ -106,25 +108,41 @@ APOSTAS DA MESA
 - Mensagens do chat tambem podem ser excluidas: cada um apaga as
   suas, e o host pode apagar qualquer uma.
 
-CORRIDA DE CAVALOS (jogos.html)
---------------------------------
-Fica isolada da Mesa — só avança enquanto alguém está na página
-Jogos, sem misturar aviso nenhum no chat da Mesa (só entra no Log de
-Eventos). O host escolhe quantos cavalos (4/6/8) e por quanto tempo
-as apostas ficam abertas (15s a 3min — nada de 5 minutos). Cada
-jogador aposta pontos num cavalo enquanto a janela estiver aberta;
-quando o tempo acaba, a corrida roda sozinha (~8s, com largada e
-tudo) e o pote e dividido, proporcional ao valor apostado, entre quem
-apostou no cavalo vencedor. Cada cavalo tem uma bolinha colorida
-("jóquei") propria pra dar pra distinguir de longe.
+JOGOS (jogos.html)
+-------------------
+Agora Corrida de Cavalos e Roleta ficam em ABAS SEPARADAS dentro de
+Jogos (um botao pra trocar entre as duas, cada uma na sua).
 
-ROLETA (jogos.html)
---------------------
+CORRIDA DE CAVALOS
+-------------------
+Fica isolada da Mesa — so avanca enquanto alguem esta na pagina
+Jogos, sem misturar aviso nenhum no chat da Mesa (so entra no Log de
+Eventos). O host escolhe quantos cavalos (4/6/8) e por quanto tempo
+as apostas ficam abertas (15s a 3min). Cada jogador aposta pontos
+num UNICO cavalo por corrida (nao da mais pra espalhar aposta em
+varios); quando o tempo acaba, a corrida roda sozinha (~8s, com
+largada e tudo) e o pote e dividido, proporcional ao valor apostado,
+entre quem apostou no cavalo vencedor. Cada cavalo tem uma bolinha
+colorida ("jóquei") propria pra dar pra distinguir de longe, e
+embaixo de cada um aparece quem ja apostou nele (com avatar de quem
+tem foto de perfil, ou o nome de quem nao tem) e quanto apostou.
+Aposta minima e ajustavel pelo Painel.
+
+ROLETA
+-------
 Gira sozinha, sem o host precisar fazer nada: abre apostas, fecha,
-gira e paga automaticamente, a cada ~5 minutos, direto — a Mesa
-mostra um resuminho dela (fase atual + ultimos numeros) com um link
-pra apostar. Aceita aposta em numero cheio (paga 35x), cor
-vermelho/preto, par/impar, ou 1-18/19-36 (essas tres pagam o dobro).
+gira e paga automaticamente, num ciclo configuravel (padrao ~5
+minutos) — a Mesa mostra um resuminho dela (fase atual + ultimos
+numeros) com um link pra apostar. Tem uma RODA DE VERDADE que gira
+na tela (na ordem real de uma roleta europeia) ate parar no numero
+sorteado, com ponteiro e tudo. Cada numero e cada aposta externa
+(vermelho/preto/par/impar/1-18/19-36) mostra uma fichinha com o
+total apostado ali, que aparece com uma animacao quando entra
+aposta nova — e as apostas externas ainda mostram embaixo quem
+apostou (avatar/nome + quanto). Aceita aposta em numero cheio (paga
+35x), cor vermelho/preto, par/impar, ou 1-18/19-36 (essas tres pagam
+o dobro). Aposta minima, duracao do ciclo e duracao do giro sao
+ajustaveis pelo Painel.
 
 FOTO DE PERFIL
 --------------

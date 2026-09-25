@@ -32,9 +32,10 @@ function render(){
     bindNav();
     return;
   }
-  app.innerHTML = navHTML('painel.html') + renderPanel();
+  app.innerHTML = navHTML('painel.html') + leftDockHTML() + rightDockHTML() + renderPanel();
   bindPanel();
   bindNav();
+  bindMiniSlot();
 }
 
 function renderUserBox(u){
@@ -62,6 +63,7 @@ function renderUserBox(u){
       ${!u.isAdmin ? `
       <div class="admin-row">
         <button data-um-ban="${escapeAttr(key)}" style="flex:1;${isBanned?'':'background:transparent;border:1px solid var(--bad);color:var(--bad);'}">${isBanned?'Desbanir':'Banir'}</button>
+        <button data-um-delete="${escapeAttr(key)}" style="flex:1;background:transparent;border:1px solid var(--bad);color:var(--bad);">Excluir conta</button>
       </div>` : ''}
     </div>
   `;
@@ -69,8 +71,8 @@ function renderUserBox(u){
 
 function renderPanel(){
   const banned = state.banned || [];
-  const locks = state.locks || { shop:false, bets:false, slot:false, horses:false, roulette:false };
-  const allLocked = locks.shop && locks.bets && locks.slot && locks.horses && locks.roulette;
+  const locks = state.locks || { shop:false, bets:false, slot:false, horses:false, roulette:false, blackjack:false };
+  const allLocked = locks.shop && locks.bets && locks.slot && locks.horses && locks.roulette && locks.blackjack;
   const shopTabs = [['colors','Cores'],['tags','Tags'],['crests','Brasões'],['avatars','Fotos de perfil'],['backgrounds','Fundos de nome']];
 
   return `
@@ -150,7 +152,7 @@ function renderPanel(){
             <button id="lockAllBtn" style="flex:1;">${allLocked ? 'Abrir tudo' : 'Fechar tudo'}</button>
           </div>
           <div class="admin-sub">
-            ${[['shop','Loja'],['bets','Apostas'],['slot','Caça-níquel'],['horses','Corrida de cavalos'],['roulette','Roleta']].map(([k,label])=> `
+            ${[['shop','Loja'],['bets','Apostas'],['slot','Caça-níquel'],['horses','Corrida de cavalos'],['roulette','Roleta'],['blackjack','Blackjack']].map(([k,label])=> `
               <div class="admin-row">
                 <span style="font-size:12.5px;color:var(--dim);flex:1;">${label}</span>
                 <button data-toggle-lock="${k}" style="${locks[k] ? 'background:var(--bad);' : ''}">${locks[k] ? 'Fechado — abrir' : 'Aberto — fechar'}</button>
@@ -202,6 +204,57 @@ function renderPanel(){
               <span style="font-size:12px;color:var(--dim);width:90px;">nada bateu</span>
               <input type="number" id="cfgPayNada" value="${config.slot.payouts.nada}" style="width:90px;" />
             </div>
+          </div>
+          <div class="admin-sub">
+            <h4>Roleta</h4>
+            <div class="admin-row">
+              <span style="font-size:12px;color:var(--dim);width:100%;">Aposta mínima:</span>
+              <input type="number" id="cfgRouletteMinBet" value="${config.roulette.minBet}" style="width:90px;" />
+              <span style="font-size:12px;color:var(--dim);">pts</span>
+            </div>
+            <div class="admin-row">
+              <span style="font-size:12px;color:var(--dim);width:100%;">Tempo de apostas:</span>
+              <input type="number" id="cfgRouletteBetting" value="${config.roulette.bettingSeconds}" style="width:90px;" />
+              <span style="font-size:12px;color:var(--dim);">seg</span>
+            </div>
+            <div class="admin-row">
+              <span style="font-size:12px;color:var(--dim);width:100%;">Duração do giro:</span>
+              <input type="number" id="cfgRouletteSpin" value="${config.roulette.spinSeconds}" style="width:90px;" />
+              <span style="font-size:12px;color:var(--dim);">seg</span>
+            </div>
+            <div class="admin-row">
+              <span style="font-size:12px;color:var(--dim);width:100%;">Tempo mostrando o resultado:</span>
+              <input type="number" id="cfgRouletteResult" value="${config.roulette.resultSeconds}" style="width:90px;" />
+              <span style="font-size:12px;color:var(--dim);">seg</span>
+            </div>
+            <div class="admin-note">Cada tempo aqui é direto — não é mais calculado a partir de uma "duração da rodada". A rodada inteira dura apostas + giro + resultado somados.</div>
+          </div>
+          <div class="admin-sub">
+            <h4>Corrida de cavalos</h4>
+            <div class="admin-row">
+              <span style="font-size:12px;color:var(--dim);width:100%;">Aposta mínima:</span>
+              <input type="number" id="cfgHorseMinBet" value="${config.horseRace.minBet}" style="width:90px;" />
+              <span style="font-size:12px;color:var(--dim);">pts</span>
+            </div>
+          </div>
+          <div class="admin-sub">
+            <h4>Blackjack</h4>
+            <div class="admin-row">
+              <span style="font-size:12px;color:var(--dim);width:100%;">Aposta mínima:</span>
+              <input type="number" id="cfgBlackjackMinBet" value="${config.blackjack.minBet}" style="width:90px;" />
+              <span style="font-size:12px;color:var(--dim);">pts</span>
+            </div>
+            <div class="admin-row">
+              <span style="font-size:12px;color:var(--dim);width:100%;">Espera por mais jogadores após o 1º sentar:</span>
+              <input type="number" id="cfgBlackjackJoin" value="${config.blackjack.joinSeconds}" style="width:90px;" />
+              <span style="font-size:12px;color:var(--dim);">seg</span>
+            </div>
+            <div class="admin-row">
+              <span style="font-size:12px;color:var(--dim);width:100%;">Tempo mostrando o resultado da rodada:</span>
+              <input type="number" id="cfgBlackjackResult" value="${config.blackjack.resultSeconds}" style="width:90px;" />
+              <span style="font-size:12px;color:var(--dim);">seg</span>
+            </div>
+            <div class="admin-note">É uma mesa só, compartilhada — todo mundo senta na mesma e joga contra a casa junto. Só dá pra sentar entre rodadas.</div>
           </div>
           <div class="admin-row" style="margin-top:10px;">
             <button id="saveConfigBtn" style="flex:1;background:var(--brass-bright);color:#221004;font-weight:700;">Salvar regras do cassino</button>
@@ -349,6 +402,22 @@ function bindPanel(){
       toast('Atualizado');
     };
   });
+  document.querySelectorAll('[data-um-delete]').forEach(b=>{
+    b.onclick = async ()=>{
+      const key = b.dataset.umDelete;
+      await loadState();
+      const u = state.users[key];
+      if(!u){ toast('Conta não encontrada'); return; }
+      if(!confirm(`Excluir a conta de ${u.username} para sempre? Isso não pode ser desfeito (o saldo e os itens dela se perdem).`)) return;
+      const name = u.username;
+      delete state.users[key];
+      state.banned = (state.banned||[]).filter(n=> n!==name);
+      logEvent('conta', `${name} foi excluído pelo host`);
+      await saveState();
+      toast(`Conta de ${name} excluída`);
+      render();
+    };
+  });
   document.getElementById('setStartBalanceBtn').onclick = async ()=>{
     const val = parseInt(document.getElementById('startBalanceInput').value, 10);
     if(isNaN(val) || val<0){ toast('Valor inválido'); return; }
@@ -412,13 +481,24 @@ function bindPanel(){
     const payTripleOutro = parseInt(document.getElementById('cfgPayTripleOutro').value,10);
     const payPar = parseInt(document.getElementById('cfgPayPar').value,10);
     const payNada = parseInt(document.getElementById('cfgPayNada').value,10);
-    if([betCost,fpAmount,fpCooldown,slotCooldown,payTriple7,payTripleOutro,payPar,payNada].some(v=> isNaN(v) || v<0)){
+    const rouletteMinBetVal = parseInt(document.getElementById('cfgRouletteMinBet').value,10);
+    const rouletteBettingVal = parseInt(document.getElementById('cfgRouletteBetting').value,10);
+    const rouletteSpinVal = parseInt(document.getElementById('cfgRouletteSpin').value,10);
+    const rouletteResultVal = parseInt(document.getElementById('cfgRouletteResult').value,10);
+    const horseMinBetVal = parseInt(document.getElementById('cfgHorseMinBet').value,10);
+    const blackjackMinBetVal = parseInt(document.getElementById('cfgBlackjackMinBet').value,10);
+    const blackjackJoinVal = parseInt(document.getElementById('cfgBlackjackJoin').value,10);
+    const blackjackResultVal = parseInt(document.getElementById('cfgBlackjackResult').value,10);
+    if([betCost,fpAmount,fpCooldown,slotCooldown,payTriple7,payTripleOutro,payPar,payNada,rouletteMinBetVal,rouletteBettingVal,rouletteSpinVal,rouletteResultVal,horseMinBetVal,blackjackMinBetVal,blackjackJoinVal,blackjackResultVal].some(v=> isNaN(v) || v<0)){
       toast('Preencha todos os valores com números válidos'); return;
     }
     await loadConfig();
     config.betCost = betCost;
     config.freePoints = { amount: fpAmount, cooldownMinutes: fpCooldown };
     config.slot = { cooldownSeconds: slotCooldown, payouts: { triple7: payTriple7, tripleOutro: payTripleOutro, par: payPar, nada: payNada } };
+    config.roulette = { minBet: rouletteMinBetVal, bettingSeconds: rouletteBettingVal, spinSeconds: rouletteSpinVal, resultSeconds: rouletteResultVal };
+    config.horseRace = { minBet: horseMinBetVal };
+    config.blackjack = { minBet: blackjackMinBetVal, joinSeconds: blackjackJoinVal, resultSeconds: blackjackResultVal };
     await saveConfig();
     toast('Regras do cassino salvas');
     render();
@@ -467,9 +547,9 @@ function bindPanel(){
   document.querySelectorAll('[data-toggle-lock]').forEach(b=>{
     b.onclick = async ()=>{
       const k = b.dataset.toggleLock;
-      const labelMap = { shop:'Loja', bets:'Apostas', slot:'Caça-níquel', horses:'Corrida de cavalos', roulette:'Roleta' };
+      const labelMap = { shop:'Loja', bets:'Apostas', slot:'Caça-níquel', horses:'Corrida de cavalos', roulette:'Roleta', blackjack:'Blackjack' };
       await refreshAndSave(()=>{
-        if(!state.locks) state.locks = { shop:false, bets:false, slot:false, horses:false, roulette:false };
+        if(!state.locks) state.locks = { shop:false, bets:false, slot:false, horses:false, roulette:false, blackjack:false };
         state.locks[k] = !state.locks[k];
         logEvent('trava', `${labelMap[k]} ${state.locks[k] ? 'fechada' : 'aberta'} pelo host`);
       });
@@ -477,11 +557,11 @@ function bindPanel(){
   });
   document.getElementById('lockAllBtn').onclick = async ()=>{
     await refreshAndSave(()=>{
-      if(!state.locks) state.locks = { shop:false, bets:false, slot:false, horses:false, roulette:false };
-      const allOn = state.locks.shop && state.locks.bets && state.locks.slot && state.locks.horses && state.locks.roulette;
+      if(!state.locks) state.locks = { shop:false, bets:false, slot:false, horses:false, roulette:false, blackjack:false };
+      const allOn = state.locks.shop && state.locks.bets && state.locks.slot && state.locks.horses && state.locks.roulette && state.locks.blackjack;
       const next = !allOn;
-      state.locks = { shop: next, bets: next, slot: next, horses: next, roulette: next };
-      logEvent('trava', next ? 'Host fechou loja, apostas, caça-níquel, corrida e roleta de uma vez' : 'Host reabriu tudo de uma vez');
+      state.locks = { shop: next, bets: next, slot: next, horses: next, roulette: next, blackjack: next };
+      logEvent('trava', next ? 'Host fechou loja, apostas, caça-níquel, corrida, roleta e blackjack de uma vez' : 'Host reabriu tudo de uma vez');
     });
     toast('Travas atualizadas');
   };

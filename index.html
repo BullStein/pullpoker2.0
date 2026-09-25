@@ -18,6 +18,8 @@ let gateError = '';
 let newBetOpen = false;
 let newBetType = 'fixa';
 let newBetExpiry = '24h';
+let newBetSingleVote = false;
+let newBetMinWager = '';
 let chatDraft = '';
 let spinning = false;
 let now = Date.now();
@@ -153,6 +155,7 @@ function renderApp(){
 
   return `
     ${navHTML('index.html')}
+    ${leftDockHTML()}
     <div class="announce-row ${announceHTML ? '' : 'empty'}">${announceHTML}</div>
     <div class="ticker-wrap ${tHTML ? '' : 'empty'}"><div class="ticker">${tHTML}</div></div>
 
@@ -245,6 +248,13 @@ function renderNewBetForm(){
       ` : `
         <div class="opts-hint">Cada pessoa escreve seu próprio palpite ao apostar. "Nenhuma das opções" fica disponível para quando ninguém acertar.</div>
       `}
+      <div class="row" style="align-items:center;gap:14px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim);cursor:pointer;">
+          <input type="checkbox" id="betSingleVote" ${newBetSingleVote?'checked':''} style="width:auto;" />
+          Voto único (cada pessoa só aposta uma vez aqui)
+        </label>
+        <input type="number" min="1" id="betMinWager" placeholder="aposta mín. (opcional)" value="${escapeAttr(newBetMinWager)}" style="width:170px;" />
+      </div>
       <div class="cost-note">Custa ${fmt(config.betCost)} pontos para abrir uma aposta.</div>
       <button class="submit-bet" id="createBetBtn">Abrir aposta</button>
     </div>
@@ -263,10 +273,11 @@ function renderBet(bet, user, betsLocked){
   const isOpen = bet.status==='aberta';
   const isLockedByTime = bet.status==='travada';
   const isResolvable = isOpen || isLockedByTime;
-  const canWager = isOpen && !betsLocked;
+  const myWagers = bet.wagers.filter(w=> w.user===me.username);
+  const votedOut = bet.singleVote && myWagers.length>0;
+  const canWager = isOpen && !betsLocked && !votedOut;
   const canResolve = (isHost || user.isAdmin) && isResolvable;
   const canManage = (isHost || user.isAdmin);
-  const myWagers = bet.wagers.filter(w=> w.user===me.username);
 
   const optionsWithVoid = [...bet.options];
   if(!optionsWithVoid.includes('Nenhuma das opções')) optionsWithVoid.push('Nenhuma das opções');
@@ -279,30 +290,35 @@ function renderBet(bet, user, betsLocked){
     const isVoidOpt = opt==='Nenhuma das opções';
     const isWinnerRow = bet.status==='fechada' && bet.winner===opt;
     const optPool = poolByOption[opt] || 0;
-    const poolTxt = optPool ? `${fmt(optPool)} pts` : '—';
     const realPct = pot>0 ? Math.round((optPool/pot)*100) : 0;
-    const sharePct = pot>0 ? Math.max(2, (optPool/pot)*100) : 0;
-    const progressBar = optPool ? `<div class="opt-progress" style="width:${sharePct.toFixed(1)}%;"></div>` : '';
+    const barPct = pot>0 ? Math.max(optPool>0?2:0, (optPool/pot)*100) : 0;
     const poolStyle = optPool ? `font-size:${poolFontSizePx(optPool)}px;` : '';
-    const poolHTML = `<div class="opool mono ${optPool?'opool-gold':''}" style="${poolStyle}">${poolTxt}${optPool?` <span class="opt-pct">${realPct}%</span>`:''}</div>`;
+    const badgeHTML = `<div class="opool-badge">
+      <span class="coin">🪙</span>
+      <span class="amt mono" style="${poolStyle}">${fmt(optPool)}</span>
+      ${optPool ? `<span class="pct">${realPct}%</span>` : ''}
+    </div>`;
+    const barHTML = pot>0 ? `<div class="opt-bar-track"><div class="opt-bar-fill" style="width:${barPct.toFixed(1)}%;"></div></div>` : '';
 
-    const voters = Array.from(new Set(bet.wagers.filter(w=> w.option===opt).map(w=> w.user)));
-    const votersRow = voters.length ? `<div class="voters-row">${voters.map(v=> voterChipHTML(v,20)).join('')}</div>` : '';
+    const votersByUser = {};
+    bet.wagers.filter(w=> w.option===opt).forEach(w=>{ votersByUser[w.user] = (votersByUser[w.user]||0) + w.amount; });
+    const voterNames = Object.keys(votersByUser);
+    const votersRow = voterNames.length ? `<div class="voters-row">${voterNames.map(v=> voterChipHTML(v, votersByUser[v], 18)).join('')}</div>` : '';
 
-    if(!canWager){
-      return `<div class="option-row ${isWinnerRow?'winner':''}">
-        ${progressBar}
-        <div class="oname ${isVoidOpt?'void':''}">${escapeHTML(opt)}</div>
-        ${poolHTML}
-      </div>${votersRow}`;
-    }
-    return `<div class="option-row">
-      ${progressBar}
-      <div class="oname ${isVoidOpt?'void':''}">${escapeHTML(opt)}</div>
-      ${poolHTML}
+    const wagerControls = canWager ? `
       <input type="number" min="1" placeholder="pts" class="wagerAmt" data-bet="${bet.id}" data-opt="${escapeAttr(opt)}" />
       <button class="wager-btn" data-bet="${bet.id}" data-opt="${escapeAttr(opt)}">Apostar</button>
-    </div>${votersRow}`;
+    ` : '';
+
+    return `<div class="option-row ${isWinnerRow?'winner':''}">
+      <div class="option-top">
+        <div class="oname ${isVoidOpt?'void':''}">${escapeHTML(opt)}</div>
+        ${badgeHTML}
+        ${wagerControls}
+      </div>
+      ${barHTML}
+      ${votersRow}
+    </div>`;
   }).join('');
 
   const openInput = (canWager && bet.type==='aberta') ? `
@@ -343,6 +359,8 @@ function renderBet(bet, user, betsLocked){
           <div class="bet-meta">
             <span>criada por ${nameHTML(bet.creator)}</span>
             <span>${bet.type==='fixa' ? 'opções fixas' : 'palpite livre'}</span>
+            ${bet.singleVote ? `<span title="cada pessoa só aposta uma vez aqui">🔒 voto único</span>` : ''}
+            ${bet.minWager ? `<span>mín. ${fmt(bet.minWager)} pts</span>` : ''}
             <span class="exp ${expSoon?'soon':''}">${isLockedByTime ? 'travou em' : 'expira:'} ${expTxt}</span>
           </div>
         </div>
@@ -350,6 +368,7 @@ function renderBet(bet, user, betsLocked){
       </div>
       <div class="pot-line">Pote total: <span class="mono">${fmt(pot)} pts</span></div>
       ${(isOpen && betsLocked) ? `<div class="admin-note" style="margin-bottom:8px;">Apostas fechadas pelo host — ninguém pode entrar agora, mas essa aposta segue aberta pra ser resolvida.</div>` : ''}
+      ${(isOpen && votedOut) ? `<div class="admin-note" style="margin-bottom:8px;">Voto único — você já apostou aqui, não dá pra apostar de novo.</div>` : ''}
       ${rows}
       ${openInput}
       ${myWagers.length ? `<div class="my-wagers">Você apostou: ${myWagers.map(w=>`<b>${fmt(w.amount)}</b> em "${escapeHTML(w.option)}"`).join(', ')}</div>` : ''}
@@ -388,6 +407,10 @@ function bindApp(){
       options = raw.split(',').map(s=>s.trim()).filter(Boolean);
       if(options.length < 1){ toast('Adicione ao menos uma opção'); return; }
     }
+    const singleVote = document.getElementById('betSingleVote').checked;
+    const minWagerRaw = document.getElementById('betMinWager').value.trim();
+    const minWager = minWagerRaw ? parseInt(minWagerRaw,10) : null;
+    if(minWagerRaw && (isNaN(minWager) || minWager<=0)){ toast('Aposta mínima inválida'); return; }
     await loadState();
     const cost = config.betCost || 0;
     const u = state.users[me.key];
@@ -397,12 +420,14 @@ function bindApp(){
     const ms = expiryToMs(newBetExpiry);
     state.bets.push({
       id: uid('b_'), title, type:newBetType, options, creator: me.username,
-      status:'aberta', wagers:[], winner:null, cost,
+      status:'aberta', wagers:[], winner:null, cost, singleVote, minWager: minWager||null,
       createdAt: Date.now(), expiresAt: ms ? Date.now()+ms : null
     });
-    logEvent('aposta', `${me.username} abriu a aposta "${title}"`);
+    logEvent('aposta', `${me.username} abriu a aposta "${title}"${singleVote?' (voto único)':''}`);
     await saveState();
     newBetOpen = false;
+    newBetSingleVote = false;
+    newBetMinWager = '';
     toast('Aposta aberta na mesa');
     render();
   };
@@ -504,6 +529,8 @@ async function placeWager(betId, option, amount, isOpenGuess=false){
   const bet = state.bets.find(b=> b.id===betId);
   const u = state.users[me.key];
   if(!bet || bet.status!=='aberta'){ toast('Essa aposta já foi encerrada'); render(); return; }
+  if(bet.singleVote && bet.wagers.some(w=> w.user===me.username)){ toast('Voto único — você já apostou aqui'); render(); return; }
+  if(bet.minWager && amount < bet.minWager){ toast(`Aposta mínima aqui: ${fmt(bet.minWager)} pts`); return; }
   if(amount > u.balance){ toast('Você não tem pontos suficientes'); return; }
   u.balance -= amount;
   if(isOpenGuess){
@@ -529,12 +556,21 @@ async function resolveBet(betId, winner){
   const winningWagers = bet.wagers.filter(w=> w.option===winner);
   const winPool = winningWagers.reduce((s,w)=> s+w.amount, 0);
   if(winPool > 0){
-    winningWagers.forEach(w=>{
-      const u = state.users[String(w.user).toLowerCase()];
-      if(u){ const share = w.amount / winPool; u.balance += w.amount + share * (pot - winPool); }
+    bet.wagers.forEach(w=>{
+      const userKey = String(w.user).toLowerCase();
+      if(w.option===winner){
+        const u = state.users[userKey];
+        const share = w.amount / winPool;
+        const profit = share * (pot - winPool);
+        if(u) u.balance += w.amount + profit;
+        recordFlow(userKey, profit);
+      } else {
+        recordFlow(userKey, -w.amount);
+      }
     });
     bet.winner = winner;
   } else {
+    bet.wagers.forEach(w=> recordFlow(String(w.user).toLowerCase(), -w.amount));
     bet.winner = 'Nenhuma das opções';
   }
   logEvent('aposta', `"${bet.title}" encerrada — resultado: ${bet.winner}`);
@@ -579,14 +615,7 @@ async function runSlot(){
   reels.forEach((r,i)=> r.textContent = final[i]);
 
   const payouts = config.slot.payouts;
-  let win = 0;
-  if(final[0]===final[1] && final[1]===final[2]){
-    win = final[0]==='7️⃣' ? payouts.triple7 : payouts.tripleOutro;
-  } else if(final[0]===final[1] || final[1]===final[2] || final[0]===final[2]){
-    win = payouts.par;
-  } else {
-    win = payouts.nada;
-  }
+  const win = slotPayout(final, payouts);
 
   document.getElementById('slotResult').textContent = win>=payouts.tripleOutro ? `JACKPOT! +${win} pontos` : `+${win} pontos`;
 
@@ -594,6 +623,7 @@ async function runSlot(){
     const uu = state.users[me.key];
     uu.balance += win;
     uu.lastSpin = Date.now();
+    recordFlow(me.key, win);
   });
   spinning = false;
   render();

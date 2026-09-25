@@ -10,7 +10,10 @@ const DEFAULT_SHOP = { colors: [], tags: [], crests: [], avatars: [], background
 const DEFAULT_CONFIG = {
   betCost: 20,
   freePoints: { amount: 100, cooldownMinutes: 3 },
-  slot: { cooldownSeconds: 45, payouts: { triple7: 500, tripleOutro: 150, par: 40, nada: 10 } }
+  slot: { cooldownSeconds: 45, payouts: { triple7: 500, tripleOutro: 150, par: 40, nada: 10 } },
+  roulette: { minBet: 5, bettingSeconds: 60, spinSeconds: 8, resultSeconds: 12 },
+  horseRace: { minBet: 5 },
+  blackjack: { minBet: 10, joinSeconds: 20, resultSeconds: 10 }
 };
 const SYMBOLS = ['🍒','🔔','⭐','7️⃣','🍋','💎'];
 const CREST_SUGGESTIONS = ['👑','💎','🔥','☠️','🐉','🦈','⚡','🃏','♠️','🎲','💰','🍀','🎯','🥇','🐺','🦁','🂡','🎰','🍒','👻','🤖','😈','👽','🤡','🏆','🎭','💍','🔑','⏳','🍾','💣','🧛','🧙','🤠','🥷','🧑‍🚀','🦄','🐲','🦊','🐯','🐼','🐝','🐎'];
@@ -93,11 +96,21 @@ const HORSE_ROSTER = [
   { id:'h8', name:'Coringa', emoji:'🐎', color:'#ef7fb0' }
 ];
 
-// ---------------- roleta automática (gira sozinha a cada 5 minutos) ----------------
-const ROULETTE_CYCLE_MS = 5*60*1000;
-const ROULETTE_SPIN_MS = 8000;
-const ROULETTE_RESULT_MS = 42000;
-const ROULETTE_BET_MS = ROULETTE_CYCLE_MS - ROULETTE_SPIN_MS - ROULETTE_RESULT_MS;
+// ---------------- roleta automática (gira sozinha, tempo configurável) ----------------
+// ordem física real da roda europeia (0-36) — usada tanto pra pagamento
+// quanto pra desenhar a roda e girar até o número certo
+const WHEEL_ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+// os três tempos da roleta são configurados diretamente pelo host (nada de
+// calcular um a partir dos outros) — apostas, giro e a pausa mostrando o
+// resultado antes da rodada seguinte começar.
+function rouletteBetMs(){ return Math.max(5, (config.roulette&&config.roulette.bettingSeconds) || 60) * 1000; }
+function rouletteSpinMs(){ return Math.max(3, (config.roulette&&config.roulette.spinSeconds) || 8) * 1000; }
+function rouletteResultMs(){ return Math.max(3, (config.roulette&&config.roulette.resultSeconds) || 12) * 1000; }
+function rouletteMinBet(){ return Math.max(1, (config.roulette&&config.roulette.minBet) || 1); }
+function horseMinBet(){ return Math.max(1, (config.horseRace&&config.horseRace.minBet) || 1); }
+function blackjackMinBet(){ return Math.max(1, (config.blackjack&&config.blackjack.minBet) || 1); }
+function blackjackJoinMs(){ return Math.max(5, (config.blackjack&&config.blackjack.joinSeconds) || 20) * 1000; }
+function blackjackResultMs(){ return Math.max(3, (config.blackjack&&config.blackjack.resultSeconds) || 10) * 1000; }
 const ROULETTE_RED = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
 function rouletteColor(n){
   if(n===0) return 'green';
@@ -128,7 +141,7 @@ function logEvent(type, text){
   if(state.eventLog.length > 300) state.eventLog = state.eventLog.slice(-300);
 }
 const EVENT_LABELS = {
-  conta: 'Conta', aposta: 'Aposta', cavalo: 'Corrida', roleta: 'Roleta', loja: 'Loja',
+  conta: 'Conta', aposta: 'Aposta', cavalo: 'Corrida', roleta: 'Roleta', blackjack: 'Blackjack', loja: 'Loja',
   chat: 'Chat', admin: 'Admin', config: 'Config', trava: 'Trava', backup: 'Backup'
 };
 
@@ -210,7 +223,131 @@ function normalizeUsers(){
     u.equipped = u.equipped || {};
     ['color','tag','crest','avatar','background'].forEach(f=>{ if(!(f in u.equipped)) u.equipped[f]=null; });
     if(typeof u.customAvatarData === 'undefined') u.customAvatarData = null;
+    if(!u.stats) u.stats = { lifetimeWon:0, lifetimeLost:0 };
+    if(typeof u.stats.lifetimeWon !== 'number') u.stats.lifetimeWon = 0;
+    if(typeof u.stats.lifetimeLost !== 'number') u.stats.lifetimeLost = 0;
   });
+}
+// registra ganho/perda líquido de um jogo (aposta, roleta, corrida, blackjack, caça-níquel...)
+// pra estatística de vida da conta e pro total que a casa já tomou (ou deu de graça).
+function recordFlow(userKey, netDelta){
+  if(!netDelta) return;
+  const u = state.users[userKey];
+  if(!u) return;
+  if(!u.stats) u.stats = { lifetimeWon:0, lifetimeLost:0 };
+  if(netDelta > 0) u.stats.lifetimeWon += netDelta;
+  else u.stats.lifetimeLost += -netDelta;
+  if(typeof state.houseTake !== 'number') state.houseTake = 0;
+  state.houseTake -= netDelta;
+}
+// tira uma versão compacta do ranking pra acompanhar as páginas fora da Mesa principal
+function miniRankingHTML(){
+  if(!state.users) return '';
+  const leaderboard = Object.values(state.users).filter(u=> !u.hidden).sort((a,b)=> b.balance-a.balance).slice(0,5);
+  if(!leaderboard.length) return '';
+  const rows = leaderboard.map((u,i)=> `
+    <div class="mini-rank-row ${u.username===me.username?'me':''}">
+      <span class="mini-rank-pos mono">${i+1}º</span>
+      ${avatarBadgeHTML(u.username,17)}
+      <span class="mini-rank-name"><span class="name-clip">${nameHTML(u.username)}</span></span>
+      <span class="mini-rank-bal mono">${fmt(u.balance)}</span>
+    </div>`).join('');
+  return `
+    <div class="mini-ranking">
+      <div class="mini-ranking-head">♥ Ranking <a href="index.html">ver mesa →</a></div>
+      ${rows}
+    </div>
+  `;
+}
+function slotPayout(final, payouts){
+  if(final[0]===final[1] && final[1]===final[2]) return final[0]==='7️⃣' ? payouts.triple7 : payouts.tripleOutro;
+  if(final[0]===final[1] || final[1]===final[2] || final[0]===final[2]) return payouts.par;
+  return payouts.nada;
+}
+// mini caça-níquel — mesma mecânica/pagamentos do da Mesa, versão compacta pra acompanhar as outras páginas
+function miniSlotHTML(){
+  if(!state.users || !state.users[me.key]) return '';
+  const u = state.users[me.key];
+  const locked = state.locks && state.locks.slot;
+  const cdMs = ((config.slot&&config.slot.cooldownSeconds) || 45) * 1000;
+  const remain = Math.max(0, cdMs - (Date.now() - (u.lastSpin||0)));
+  const ready = remain<=0 && !locked;
+  return `
+    <div class="mini-slot">
+      <div class="mini-slot-head">🎰 Caça-níquel</div>
+      <div class="mini-slot-reels" id="dockSlotReels"><span class="dreel">🎲</span><span class="dreel">🎲</span><span class="dreel">🎲</span></div>
+      <div class="mini-slot-result" id="dockSlotResult"></div>
+      ${locked ? `<div class="mini-slot-note">fechado pelo host</div>` :
+        `<button class="mini-slot-btn" id="dockSpinBtn" ${ready?'':'disabled'}>${ready?'Girar':fmtClock(remain)}</button>`}
+    </div>
+  `;
+}
+// liga o botão do mini caça-níquel — chamar depois de qualquer render() em
+// páginas que incluam rightDockHTML()
+function bindMiniSlot(){
+  const btn = document.getElementById('dockSpinBtn');
+  if(!btn) return;
+  btn.onclick = async ()=>{
+    if(state.locks && state.locks.slot){ toast('Caça-níquel fechado pelo host'); return; }
+    const u = state.users[me.key];
+    const cd = ((config.slot&&config.slot.cooldownSeconds) || 45) * 1000;
+    if(Date.now() - (u.lastSpin||0) < cd) return;
+    btn.disabled = true;
+    const reels = document.querySelectorAll('#dockSlotReels .dreel');
+    const ticks = setInterval(()=>{ reels.forEach(r=> r.textContent = rand(SYMBOLS)); }, 90);
+    await new Promise(res=> setTimeout(res, 700));
+    clearInterval(ticks);
+    const final = [rand(SYMBOLS), rand(SYMBOLS), rand(SYMBOLS)];
+    reels.forEach((r,i)=> r.textContent = final[i]);
+    const payouts = config.slot.payouts;
+    const win = slotPayout(final, payouts);
+    const resEl = document.getElementById('dockSlotResult');
+    if(resEl) resEl.textContent = win>=payouts.tripleOutro ? `JACKPOT +${win}` : `+${win}`;
+    await loadState();
+    const uu = state.users[me.key];
+    uu.balance += win;
+    uu.lastSpin = Date.now();
+    recordFlow(me.key, win);
+    await saveState();
+    toast(win>=payouts.tripleOutro ? `Jackpot! +${win} pontos` : `+${win} pontos no caça-níquel`);
+    render();
+  };
+}
+// monta o dock direito (ranking + caça-níquel) — fixo à direita em telas
+// largas, e empilhado normalmente em telas estreitas (CSS cuida da troca)
+function rightDockHTML(){
+  const r = miniRankingHTML();
+  const s = miniSlotHTML();
+  if(!r && !s) return '';
+  return `<div class="side-dock right">${r}${s}</div>`;
+}
+// tamanho da fonte do número da casa — cresce com a magnitude (escala log,
+// suave, com teto), pra "crescer conforme o número cresce" sem explodir
+function houseFontSize(n){
+  const abs = Math.abs(n||0);
+  const scaled = 22 + Math.log10(abs+1) * 9;
+  return Math.max(22, Math.min(64, Math.round(scaled)));
+}
+// dock esquerdo — estatística de vida da conta (ganho/perda) e a banca da
+// casa em dourado, crescendo de tamanho conforme o valor cresce
+function leftDockHTML(){
+  if(!state.users || !state.users[me.key]) return '';
+  const u = state.users[me.key];
+  const stats = u.stats || { lifetimeWon:0, lifetimeLost:0 };
+  const house = typeof state.houseTake==='number' ? state.houseTake : 0;
+  return `
+    <div class="side-dock left">
+      <div class="lifetime-card">
+        <div class="lifetime-head">Sua conta</div>
+        <div class="lifetime-row won"><span>Ganho</span><span class="mono">+${fmt(stats.lifetimeWon)}</span></div>
+        <div class="lifetime-row lost"><span>Perda</span><span class="mono">-${fmt(stats.lifetimeLost)}</span></div>
+      </div>
+      <div class="house-card">
+        <div class="house-label">Banca da casa</div>
+        <div class="house-number mono" style="font-size:${houseFontSize(house)}px;">${fmt(house)}</div>
+      </div>
+    </div>
+  `;
 }
 function seedShopDefaults(){
   if(!state.shop) state.shop = JSON.parse(JSON.stringify(DEFAULT_SHOP));
@@ -254,10 +391,13 @@ async function loadState(){
   if(!state.users) state.users = {};
   if(!state.announcements) state.announcements = [];
   if(!state.horseRace) state.horseRace = { status:'fechada', horses:[], wagers:[], startedAt:null, bettingEndsAt:null, startedAtRun:null, raceEndsAt:null, winnerId:null, potPaid:false };
-  if(!state.roulette) state.roulette = { phase:'apostas', cycleStartedAt: Date.now(), bettingEndsAt: Date.now()+ROULETTE_BET_MS, spinEndsAt:null, wagers:[], resultNumber:null, potPaid:false, history:[] };
-  if(!state.locks) state.locks = { shop:false, bets:false, slot:false, horses:false, roulette:false };
+  if(!state.roulette) state.roulette = { phase:'apostas', cycleStartedAt: Date.now(), bettingEndsAt: Date.now()+rouletteBetMs(), spinStartedAt:null, spinEndsAt:null, wagers:[], resultNumber:null, potPaid:false, history:[] };
+  if(!state.locks) state.locks = { shop:false, bets:false, slot:false, horses:false, roulette:false, blackjack:false };
   if(typeof state.locks.roulette === 'undefined') state.locks.roulette = false;
+  if(typeof state.locks.blackjack === 'undefined') state.locks.blackjack = false;
   if(!state.eventLog) state.eventLog = [];
+  if(!state.blackjackTable) state.blackjackTable = newBlackjackTable();
+  if(typeof state.houseTake !== 'number') state.houseTake = 0;
   normalizeUsers();
   if(!serverUnreachable && seedShopDefaults()) await saveState();
 }
@@ -281,6 +421,24 @@ async function loadConfig(){
   if(!config.slot) config.slot = DEFAULT_CONFIG.slot;
   if(!config.slot.payouts) config.slot.payouts = DEFAULT_CONFIG.slot.payouts;
   if(typeof config.betCost !== 'number') config.betCost = DEFAULT_CONFIG.betCost;
+  if(!config.roulette) config.roulette = JSON.parse(JSON.stringify(DEFAULT_CONFIG.roulette));
+  if(typeof config.roulette.minBet !== 'number') config.roulette.minBet = DEFAULT_CONFIG.roulette.minBet;
+  if(typeof config.roulette.bettingSeconds !== 'number'){
+    // instalação antiga só tinha cycleMinutes — converte pra um valor direto
+    // uma vez só, em vez de continuar calculando o tempo de aposta sozinho
+    const legacyCycleS = (typeof config.roulette.cycleMinutes === 'number' ? config.roulette.cycleMinutes : 5) * 60;
+    const legacySpinS = typeof config.roulette.spinSeconds === 'number' ? config.roulette.spinSeconds : 8;
+    config.roulette.bettingSeconds = Math.max(5, legacyCycleS - legacySpinS - 12);
+  }
+  if(typeof config.roulette.spinSeconds !== 'number') config.roulette.spinSeconds = DEFAULT_CONFIG.roulette.spinSeconds;
+  if(typeof config.roulette.resultSeconds !== 'number') config.roulette.resultSeconds = DEFAULT_CONFIG.roulette.resultSeconds;
+  delete config.roulette.cycleMinutes;
+  if(!config.horseRace) config.horseRace = JSON.parse(JSON.stringify(DEFAULT_CONFIG.horseRace));
+  if(typeof config.horseRace.minBet !== 'number') config.horseRace.minBet = DEFAULT_CONFIG.horseRace.minBet;
+  if(!config.blackjack) config.blackjack = JSON.parse(JSON.stringify(DEFAULT_CONFIG.blackjack));
+  if(typeof config.blackjack.minBet !== 'number') config.blackjack.minBet = DEFAULT_CONFIG.blackjack.minBet;
+  if(typeof config.blackjack.joinSeconds !== 'number') config.blackjack.joinSeconds = DEFAULT_CONFIG.blackjack.joinSeconds;
+  if(typeof config.blackjack.resultSeconds !== 'number') config.blackjack.resultSeconds = DEFAULT_CONFIG.blackjack.resultSeconds;
 }
 async function saveConfig(){
   try{
@@ -424,12 +582,14 @@ function hasEquippedAvatar(username){
 
 // avatar quando a pessoa tem um equipado; senão, o nome em texto —
 // pedido explícito: foto de perfil obrigatória pra aparecer como ícone.
-function voterChipHTML(username, size){
+// mostra também quanto essa pessoa apostou ali.
+function voterChipHTML(username, amount, size){
   size = size || 20;
+  const amtTxt = amount ? `<span class="voter-amt mono">${fmt(amount)}</span>` : '';
   if(hasEquippedAvatar(username)){
-    return `<span class="voter-chip" title="${escapeAttr(username)}">${avatarBadgeHTML(username, size)}</span>`;
+    return `<span class="voter-chip" title="${escapeAttr(username)}${amount?` — ${fmt(amount)} pts`:''}">${avatarBadgeHTML(username, size)}${amtTxt}</span>`;
   }
-  return `<span class="voter-name-pill">${nameHTML(username)}</span>`;
+  return `<span class="voter-name-pill" title="${escapeAttr(username)}"><span class="name-clip">${nameHTML(username)}</span>${amtTxt}</span>`;
 }
 
 // tamanho da fonte do valor do pote crescendo com o valor apostado (escala
@@ -558,12 +718,18 @@ function processHorseRace(){
     const pot = (race.wagers||[]).reduce((s,w)=> s+w.amount, 0);
     const winWagers = (race.wagers||[]).filter(w=> w.horseId===race.winnerId);
     const winPool = winWagers.reduce((s,w)=> s+w.amount, 0);
-    if(winPool > 0){
-      winWagers.forEach(w=>{
-        const u = state.users[String(w.user).toLowerCase()];
-        if(u){ const share = w.amount / winPool; u.balance += w.amount + share * (pot - winPool); }
-      });
-    }
+    (race.wagers||[]).forEach(w=>{
+      const userKey = String(w.user).toLowerCase();
+      if(w.horseId===race.winnerId && winPool>0){
+        const u = state.users[userKey];
+        const share = w.amount / winPool;
+        const profit = share * (pot - winPool);
+        if(u) u.balance += w.amount + profit;
+        recordFlow(userKey, profit);
+      } else {
+        recordFlow(userKey, -w.amount);
+      }
+    });
     race.status = 'resultado';
     race.potPaid = true;
     const winnerHorse = race.horses.find(h=> h.id===race.winnerId);
@@ -583,7 +749,8 @@ function processRoulette(){
   if(rl.phase==='apostas' && rl.bettingEndsAt && nowTs >= rl.bettingEndsAt){
     rl.phase = 'girando';
     rl.resultNumber = Math.floor(Math.random()*37);
-    rl.spinEndsAt = nowTs + ROULETTE_SPIN_MS;
+    rl.spinStartedAt = nowTs;
+    rl.spinEndsAt = nowTs + rouletteSpinMs();
     changed = true;
   }
   if(rl.phase==='girando' && rl.spinEndsAt && nowTs >= rl.spinEndsAt && !rl.potPaid){
@@ -595,14 +762,18 @@ function processRoulette(){
       else if(w.betType==='cor' && color!=='green' && w.betValue===color){ win=true; mult=2; }
       else if(w.betType==='paridade' && num!==0 && ((num%2===0 && w.betValue==='par')||(num%2===1 && w.betValue==='impar'))){ win=true; mult=2; }
       else if(w.betType==='metade' && num!==0 && ((num<=18 && w.betValue==='baixa')||(num>=19 && w.betValue==='alta'))){ win=true; mult=2; }
+      const userKey = String(w.user).toLowerCase();
       if(win){
-        const u = state.users[String(w.user).toLowerCase()];
+        const u = state.users[userKey];
         if(u) u.balance += w.amount * mult;
+        recordFlow(userKey, w.amount * (mult-1));
+      } else {
+        recordFlow(userKey, -w.amount);
       }
     });
     rl.potPaid = true;
     rl.phase = 'resultado';
-    rl.resultEndsAt = nowTs + ROULETTE_RESULT_MS;
+    rl.resultEndsAt = nowTs + rouletteResultMs();
     rl.lastNumber = num;
     rl.lastColor = color;
     if(!rl.history) rl.history = [];
@@ -613,7 +784,8 @@ function processRoulette(){
   if(rl.phase==='resultado' && rl.resultEndsAt && nowTs >= rl.resultEndsAt){
     rl.phase = 'apostas';
     rl.cycleStartedAt = nowTs;
-    rl.bettingEndsAt = nowTs + ROULETTE_BET_MS;
+    rl.bettingEndsAt = nowTs + rouletteBetMs();
+    rl.spinStartedAt = null;
     rl.spinEndsAt = null;
     rl.resultEndsAt = null;
     rl.wagers = [];
@@ -621,4 +793,162 @@ function processRoulette(){
     changed = true;
   }
   return changed;
+}
+
+// ---------------- Blackjack — mesa central multiplayer (contra a casa,
+// baralho "infinito": cada carta sorteada é independente, sem monte físico) ----------------
+const BJ_RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const BJ_SUITS = ['♠','♥','♦','♣'];
+const MAX_BJ_SEATS = 6;
+function bjDrawCard(){ return { r: rand(BJ_RANKS), s: rand(BJ_SUITS) }; }
+function bjCardValue(card){ if(card.r==='A') return 11; if(card.r==='J'||card.r==='Q'||card.r==='K') return 10; return parseInt(card.r,10); }
+function bjHandTotal(cards){
+  let total = cards.reduce((s,c)=> s+bjCardValue(c), 0);
+  let aces = cards.filter(c=> c.r==='A').length;
+  while(total>21 && aces>0){ total -= 10; aces--; }
+  return total;
+}
+function bjIsBlackjack(cards){ return cards.length===2 && bjHandTotal(cards)===21; }
+function bjCardHTML(card, hidden, isNew, small){
+  const sizeCls = small ? ' bj-card-sm' : '';
+  if(hidden) return `<span class="bj-card${sizeCls} bj-hidden${isNew?' bj-deal-in':''}"></span>`;
+  const red = card.s==='♥'||card.s==='♦';
+  return `<span class="bj-card${sizeCls}${red?' bj-red':''}${isNew?' bj-deal-in':''}">
+    <span class="bj-card-corner">${escapeHTML(card.r)}<em>${card.s}</em></span>
+    <span class="bj-card-pip">${card.s}</span>
+  </span>`;
+}
+
+function newBlackjackTable(){
+  return { phase:'aberta', seats:[], dealer:{cards:[]}, turnIndex:-1, autoStartAt:null, resultEndsAt:null, roundId:null };
+}
+
+// acha o próximo assento que ainda não jogou (pula quem já tem blackjack
+// natural, estourou ou já parou) a partir de fromIdx
+function bjNextEligibleIndex(seats, fromIdx){
+  for(let i=fromIdx; i<seats.length; i++){ if(seats[i].status==='aguardando') return i; }
+  return -1;
+}
+// casa compra até 17 (inclusive) e paga/cobra todo mundo de uma vez
+function bjDealerPlayAndResolve(table){
+  while(bjHandTotal(table.dealer.cards) < 17) table.dealer.cards.push(bjDrawCard());
+  const dealerTotal = bjHandTotal(table.dealer.cards);
+  const dealerBJ = bjIsBlackjack(table.dealer.cards);
+  table.seats.forEach(seat=>{
+    if(seat.status==='estourou'){ seat.result='estourou'; seat.payout=0; seat.status='resolvido'; return; }
+    const seatTotal = bjHandTotal(seat.cards);
+    const seatBJ = seat.status==='blackjack_natural';
+    if(seatBJ && dealerBJ){ seat.result='empate'; seat.payout=seat.bet; }
+    else if(seatBJ){ seat.result='blackjack'; seat.payout=Math.round(seat.bet*2.5); }
+    else if(dealerBJ){ seat.result='perdeu'; seat.payout=0; }
+    else if(dealerTotal>21 || seatTotal>dealerTotal){ seat.result='ganhou'; seat.payout=seat.bet*2; }
+    else if(seatTotal<dealerTotal){ seat.result='perdeu'; seat.payout=0; }
+    else { seat.result='empate'; seat.payout=seat.bet; }
+    seat.status = 'resolvido';
+    const u = state.users[String(seat.user).toLowerCase()];
+    if(u && seat.payout>0) u.balance += seat.payout;
+    recordFlow(String(seat.user).toLowerCase(), seat.payout - seat.bet);
+  });
+}
+// passa a vez pro próximo elegível; se acabou todo mundo, a casa joga e resolve
+function bjAdvanceTurn(table){
+  const next = bjNextEligibleIndex(table.seats, table.turnIndex+1);
+  if(next===-1){
+    bjDealerPlayAndResolve(table);
+    table.phase = 'resultado';
+    table.resultEndsAt = Date.now() + blackjackResultMs();
+    const winners = table.seats.filter(s=> s.payout>0).map(s=> s.user);
+    logEvent('blackjack', `Rodada de blackjack terminou${winners.length ? ' — ganharam: '+winners.join(', ') : ' — ninguém bateu a casa'}`);
+  } else {
+    table.turnIndex = next;
+    table.seats[next].status = 'jogando';
+  }
+}
+// chamada em todo poll — abre a rodada quando o tempo de espera de novos
+// jogadores acaba, e reabre a mesa depois de mostrar o resultado
+function processBlackjackTable(){
+  const table = state.blackjackTable;
+  if(!table) return false;
+  const nowTs = Date.now();
+  let changed = false;
+  if(table.phase==='aberta' && table.autoStartAt && nowTs >= table.autoStartAt && table.seats.length>=2){
+    table.dealer = { cards:[bjDrawCard(), bjDrawCard()] };
+    table.seats.forEach(seat=>{
+      seat.cards = [bjDrawCard(), bjDrawCard()];
+      seat.status = bjIsBlackjack(seat.cards) ? 'blackjack_natural' : 'aguardando';
+      seat.result = null; seat.payout = 0;
+    });
+    table.roundId = uid('bj_');
+    table.phase = 'jogando';
+    table.turnIndex = -1;
+    table.autoStartAt = null;
+    bjAdvanceTurn(table);
+    logEvent('blackjack', `Rodada de blackjack começou com ${table.seats.length} jogador(es)`);
+    changed = true;
+  }
+  if(table.phase==='resultado' && table.resultEndsAt && nowTs >= table.resultEndsAt){
+    state.blackjackTable = newBlackjackTable();
+    changed = true;
+  }
+  return changed;
+}
+
+// ações da mesa — cada uma recebe a key (lowercase) de quem chamou;
+// devolvem {ok, error?} e quem chamou é responsável por saveState()
+function bjTableJoin(userKey, bet){
+  const table = state.blackjackTable;
+  const u = state.users[userKey];
+  if(!u) return { ok:false, error:'Conta não encontrada.' };
+  if(table.phase!=='aberta') return { ok:false, error:'A mesa já está com uma rodada em andamento — espere terminar.' };
+  if(table.seats.length >= MAX_BJ_SEATS) return { ok:false, error:'Mesa cheia.' };
+  if(table.seats.some(s=> s.user.toLowerCase()===userKey)) return { ok:false, error:'Você já está sentado.' };
+  if(!bet || bet<=0) return { ok:false, error:'Digite um valor válido.' };
+  if(bet < blackjackMinBet()) return { ok:false, error:`Aposta mínima: ${blackjackMinBet()} pts` };
+  if(bet > u.balance) return { ok:false, error:'Pontos insuficientes' };
+  u.balance -= bet;
+  table.seats.push({ user:u.username, bet, cards:[], status:'aguardando', result:null, payout:0 });
+  // o contador só começa quando a mesa bate o mínimo de 2 jogadores — com só
+  // 1 sentado, a mesa fica esperando parada, sem rodar sozinha
+  if(table.seats.length===2) table.autoStartAt = Date.now() + blackjackJoinMs();
+  logEvent('blackjack', `${u.username} sentou à mesa de blackjack com ${bet} pts`);
+  return { ok:true };
+}
+function bjTableLeave(userKey){
+  const table = state.blackjackTable;
+  if(table.phase!=='aberta') return { ok:false, error:'Não dá pra sair com a rodada em andamento.' };
+  const idx = table.seats.findIndex(s=> s.user.toLowerCase()===userKey);
+  if(idx===-1) return { ok:false, error:'Você não está sentado.' };
+  const seat = table.seats[idx];
+  const u = state.users[userKey];
+  if(u) u.balance += seat.bet;
+  table.seats.splice(idx,1);
+  if(table.seats.length < 2) table.autoStartAt = null;
+  logEvent('blackjack', `${seat.user} levantou da mesa e recebeu ${seat.bet} pts de volta`);
+  return { ok:true };
+}
+function bjTableForceStart(){
+  const table = state.blackjackTable;
+  if(table.phase!=='aberta' || table.seats.length<2) return { ok:false, error:'Precisa de pelo menos 2 jogadores sentados.' };
+  table.autoStartAt = Date.now();
+  return { ok:true };
+}
+function bjTableHit(userKey){
+  const table = state.blackjackTable;
+  if(table.phase!=='jogando') return { ok:false };
+  const seat = table.seats[table.turnIndex];
+  if(!seat || seat.user.toLowerCase()!==userKey || seat.status!=='jogando') return { ok:false, error:'Não é sua vez.' };
+  seat.cards.push(bjDrawCard());
+  const total = bjHandTotal(seat.cards);
+  if(total > 21){ seat.status='estourou'; bjAdvanceTurn(table); }
+  else if(total === 21){ seat.status='parou'; bjAdvanceTurn(table); }
+  return { ok:true };
+}
+function bjTableStand(userKey){
+  const table = state.blackjackTable;
+  if(table.phase!=='jogando') return { ok:false };
+  const seat = table.seats[table.turnIndex];
+  if(!seat || seat.user.toLowerCase()!==userKey || seat.status!=='jogando') return { ok:false, error:'Não é sua vez.' };
+  seat.status = 'parou';
+  bjAdvanceTurn(table);
+  return { ok:true };
 }

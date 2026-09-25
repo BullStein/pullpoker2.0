@@ -43,8 +43,10 @@ DEFAULT_STATE = {
     "roulette": {"phase": "apostas", "cycleStartedAt": None, "bettingEndsAt": None,
                  "spinEndsAt": None, "wagers": [], "resultNumber": None, "potPaid": False,
                  "history": []},
-    "locks": {"shop": False, "bets": False, "slot": False, "horses": False, "roulette": False},
-    "eventLog": [], "seedVersion": 0
+    "locks": {"shop": False, "bets": False, "slot": False, "horses": False, "roulette": False, "blackjack": False},
+    "eventLog": [], "seedVersion": 0, "houseTake": 0,
+    "blackjackTable": {"phase": "aberta", "seats": [], "dealer": {"cards": []}, "turnIndex": -1,
+                        "autoStartAt": None, "resultEndsAt": None, "roundId": None}
 }
 
 DEFAULT_USERS = {
@@ -56,7 +58,7 @@ DEFAULT_USERS = {
             "lastBonus": 0, "lastSpin": 0,
             "owned": {"colors": [], "tags": [], "crests": [], "avatars": [], "backgrounds": []},
             "equipped": {"color": None, "tag": None, "crest": None, "avatar": None, "background": None},
-            "customAvatarData": None
+            "customAvatarData": None, "stats": {"lifetimeWon": 0, "lifetimeLost": 0}
         }
     },
     "banned": []
@@ -68,7 +70,10 @@ DEFAULT_CONFIG = {
     "slot": {
         "cooldownSeconds": 45,
         "payouts": {"triple7": 500, "tripleOutro": 150, "par": 40, "nada": 10}
-    }
+    },
+    "roulette": {"minBet": 5, "bettingSeconds": 60, "spinSeconds": 8, "resultSeconds": 12},
+    "horseRace": {"minBet": 5},
+    "blackjack": {"minBet": 10, "joinSeconds": 20, "resultSeconds": 10}
 }
 
 

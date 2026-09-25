@@ -17,6 +17,9 @@ let now = Date.now();
 let raceHorseCount = 6;
 let raceDuration = '45';
 let liveLoopHandle = null;
+let gamesTab = 'roleta';
+let seenWagerIds = new Set(); // pra só animar fichas novas, não todo mundo a cada poll
+let wheelSeeded = false;
 const RACE_DURATION_MS = 8000;
 const RACE_HOLD_FRACTION = 0.10; // fração inicial em que os cavalos ficam na largada
 
@@ -69,29 +72,176 @@ function render(){
     bindNav();
     return;
   }
-  app.innerHTML = navHTML('jogos.html') + renderGames();
+  app.innerHTML = navHTML('jogos.html') + leftDockHTML() + rightDockHTML() + renderGames();
   bindGames();
+  bindMiniSlot();
 }
 
 function renderGames(){
   const user = state.users[me.key];
   const race = state.horseRace;
   const rl = state.roulette;
+  const bj = state.blackjackTable;
 
   return `
     <div class="games-hero">
       <h1 class="display">Jogos da Casa</h1>
-      <p>Corrida de Cavalos e a Roleta automática — que não para de girar.</p>
+      <p>Corrida de Cavalos, Roleta automática e a Mesa de Blackjack — todo mundo junto contra a casa.</p>
     </div>
-    <div class="card" style="margin-bottom:20px;">
-      <h2 style="margin:0 0 14px;font-size:20px;">🐎 Corrida de Cavalos</h2>
-      ${renderRaceBody(user, race)}
+    <div class="shop-tabs">
+      <button class="shop-tab ${gamesTab==='roleta'?'active':''}" data-gamestab="roleta">🎡 Roleta</button>
+      <button class="shop-tab ${gamesTab==='cavalos'?'active':''}" data-gamestab="cavalos">🐎 Corrida de Cavalos</button>
+      <button class="shop-tab ${gamesTab==='blackjack'?'active':''}" data-gamestab="blackjack">🃏 Blackjack</button>
     </div>
-    <div class="card">
-      <h2 style="margin:0 0 14px;font-size:20px;">🎡 Roleta</h2>
-      ${renderRouletteBody(user, rl)}
+    ${gamesTab==='cavalos' ? `
+      <div class="card">
+        ${renderRaceBody(user, race)}
+      </div>
+    ` : gamesTab==='roleta' ? `
+      <div class="card">
+        ${renderRouletteBody(user, rl)}
+      </div>
+    ` : `
+      <div class="card">
+        ${renderBlackjackBody(user, bj)}
+      </div>
+    `}
+  `;
+}
+
+// ---------------- Blackjack: mesa central (todo mundo senta na mesma mesa,
+// joga na sua vez, e só dá pra entrar quando a mesa está aberta entre rodadas) ----------------
+let bjLastRoundId = undefined; // undefined força reset na 1ª renderização
+let bjSeenCounts = {};   // quantas cartas de cada assento/casa já foram "vistas" (renderizadas antes)
+let bjRevealedRounds = new Set(); // rodadas cuja carta escondida da casa já animou a virada
+
+function bjResetSeenIfNewRound(table){
+  if(table.roundId !== bjLastRoundId){
+    bjSeenCounts = {};
+    bjLastRoundId = table.roundId;
+  }
+}
+function bjIsCardNew(key, idx){ return idx >= (bjSeenCounts[key]||0); }
+
+// posiciona os assentos num arco na parte da frente da mesa oval — cada um
+// com um ângulo próprio em volta do centro, pra parecer mesa redonda de verdade
+function bjSeatPosStyle(i, total){
+  if(total<=0) return '';
+  const spread = total<=1 ? 0 : Math.min(150, 30*(total-1));
+  const startAngle = -spread/2;
+  const angle = total<=1 ? 0 : startAngle + (spread/(total-1))*i;
+  const rad = angle*Math.PI/180;
+  const cx = 50, cy = 58, rx = 43, ry = 36;
+  const x = cx + rx*Math.sin(rad);
+  const y = cy + ry*Math.cos(rad);
+  return `left:${x.toFixed(1)}%; top:${y.toFixed(1)}%;`;
+}
+
+function renderBlackjackBody(user, table){
+  bjResetSeenIfNewRound(table);
+  const locked = state.locks && state.locks.blackjack;
+  const minBet = blackjackMinBet();
+  const mySeatIdx = table.seats.findIndex(s=> s.user===me.username);
+  const mySeat = mySeatIdx>=0 ? table.seats[mySeatIdx] : null;
+
+  const dealerHiddenIdx = table.phase==='jogando' ? 1 : -1;
+  const dealerFullTotal = table.dealer.cards.length ? bjHandTotal(table.dealer.cards) : 0;
+  const dealerShownTotal = dealerHiddenIdx===1 ? bjCardValue(table.dealer.cards[0]) : dealerFullTotal;
+  const justRevealed = table.phase==='resultado' && table.dealer.cards.length>1 && !bjRevealedRounds.has(table.roundId);
+  const dealerCardsHTML = table.dealer.cards.map((c,i)=>{
+    const hidden = i===dealerHiddenIdx;
+    const isNew = bjIsCardNew('dealer', i) || (i===1 && justRevealed);
+    return bjCardHTML(c, hidden, isNew);
+  }).join('');
+  bjSeenCounts['dealer'] = table.dealer.cards.length;
+  if(table.phase==='resultado' && table.roundId) bjRevealedRounds.add(table.roundId);
+
+  const seatResultLabel = { ganhou:'ganhou', empate:'empatou', perdeu:'perdeu', blackjack:'blackjack! ganhou', estourou:'estourou' };
+  const seatsHTML = table.seats.map((seat,i)=>{
+    const key = 'seat_'+i;
+    const isMine = seat.user===me.username;
+    const isActive = table.phase==='jogando' && table.turnIndex===i;
+    const total = bjHandTotal(seat.cards);
+    const cardsHTML = seat.cards.map((c,ci)=> bjCardHTML(c, false, bjIsCardNew(key,ci), true)).join('');
+    bjSeenCounts[key] = seat.cards.length;
+    let statusText = '', statusCls = '';
+    if(seat.status==='aguardando') statusText = 'esperando a vez';
+    else if(seat.status==='jogando') statusText = 'jogando…';
+    else if(seat.status==='parou') statusText = `parou em ${total}`;
+    else if(seat.status==='estourou'){ statusText='estourou'; statusCls='lose'; }
+    else if(seat.status==='blackjack_natural'){ statusText='blackjack natural!'; statusCls='win'; }
+    else if(seat.status==='resolvido'){ statusText = seatResultLabel[seat.result]||seat.result; statusCls = seat.payout>seat.bet?'win':(seat.payout===seat.bet?'':'lose'); }
+    return `
+      <div class="bj-seat ${isActive?'active':''} ${isMine?'mine':''}" style="${bjSeatPosStyle(i, table.seats.length)}">
+        <div class="bj-seat-name">${avatarBadgeHTML(seat.user,16)}<span class="name-clip">${escapeHTML(seat.user)}</span></div>
+        <div class="bj-seat-bet mono">${fmt(seat.bet)} pts</div>
+        <div class="bj-seat-cards">${cardsHTML}</div>
+        ${seat.cards.length ? `<div class="bj-seat-total">${total}</div>` : ''}
+        <div class="bj-seat-status ${statusCls}">${statusText}</div>
+      </div>
+    `;
+  }).join('');
+
+  const autoStartRemain = table.autoStartAt ? Math.max(0, table.autoStartAt-now) : 0;
+  const resultRemain = table.resultEndsAt ? Math.max(0, table.resultEndsAt-now) : 0;
+  const turnSeat = table.turnIndex>=0 ? table.seats[table.turnIndex] : null;
+
+  const label = locked && table.phase==='aberta' ? 'Blackjack fechado pelo host'
+    : table.phase==='aberta' ? (table.seats.length>=2 ? 'Mesa aberta — esperando mais gente' : table.seats.length===1 ? 'Precisa de +1 jogador pra começar' : 'Mesa vazia — sente-se pra começar')
+    : table.phase==='jogando' ? (turnSeat ? (turnSeat.user===me.username ? 'Sua vez!' : `Vez de ${escapeHTML(turnSeat.user)}`) : 'A casa está jogando…')
+    : 'Resultado da rodada';
+
+  const topBar = `
+    <div class="race-status-bar">
+      <div class="rlabel">${label}</div>
+      ${table.phase==='aberta' && table.autoStartAt ? `<div class="rcountdown mono" id="bjAutoStartCountdown">${fmtClock(autoStartRemain)}</div>` : ''}
+      ${table.phase==='resultado' ? `<div class="rcountdown mono" id="bjResultCountdown">${fmtClock(resultRemain)}</div>` : ''}
     </div>
   `;
+
+  const feltHTML = `
+    <div class="bj-felt">
+      <div class="bj-dealer-seat">
+        <div class="bj-seat-name" style="justify-content:center;">🂡 Casa</div>
+        <div class="bj-seat-cards">${dealerCardsHTML || '<span style="font-size:11px;color:var(--muted);">—</span>'}</div>
+        ${table.dealer.cards.length ? `<div class="bj-seat-total">${dealerHiddenIdx===1 ? dealerShownTotal+' + ?' : dealerShownTotal}</div>` : ''}
+      </div>
+      <div class="bj-seats-wrap">${seatsHTML}</div>
+    </div>
+  `;
+
+  let controlsHTML;
+  if(table.phase==='aberta'){
+    if(!mySeat){
+      if(locked) controlsHTML = `<div class="empty-state">Blackjack fechado pelo host.</div>`;
+      else if(table.seats.length >= MAX_BJ_SEATS) controlsHTML = `<div class="empty-state">Mesa cheia — espere a próxima rodada.</div>`;
+      else controlsHTML = `
+        <div class="admin-row">
+          <input type="number" min="${minBet}" placeholder="min. ${minBet}" id="bjBetInput" style="width:120px;" />
+          <button class="new-bet-toggle" id="bjJoinBtn">Sentar à mesa</button>
+        </div>`;
+    } else {
+      controlsHTML = `
+        <div class="admin-note" style="margin-bottom:8px;">Você está sentado com ${fmt(mySeat.bet)} pts.${table.seats.length>=2?' Esperando a rodada começar…':' A mesa precisa de pelo menos 2 jogadores sentados pra rodar — chame mais alguém.'}</div>
+        <div class="race-controls">
+          <button id="bjLeaveBtn" style="background:transparent;border:1px solid var(--bad);color:var(--bad);">Sair da mesa</button>
+          ${table.seats.length>=2 ? `<button id="bjForceStartBtn">Começar agora</button>` : ''}
+        </div>`;
+    }
+  } else if(table.phase==='jogando'){
+    const myTurn = mySeat && table.turnIndex===mySeatIdx && mySeat.status==='jogando';
+    if(myTurn) controlsHTML = `
+      <div class="bj-controls">
+        <button id="bjHitBtn">Pedir carta</button>
+        <button class="bj-stand" id="bjStandBtn">Parar</button>
+      </div>`;
+    else if(mySeat) controlsHTML = `<div class="admin-note">Aguarde sua vez…</div>`;
+    else controlsHTML = `<div class="empty-state">Rodada em andamento — espere terminar pra entrar.</div>`;
+  } else {
+    controlsHTML = `<div class="admin-note">A mesa reabre pra todo mundo em instantes.</div>`;
+  }
+
+  return topBar + feltHTML + controlsHTML;
 }
 
 function renderRaceBody(user, race){
@@ -130,28 +280,34 @@ function renderRaceBetting(user, race){
   const closing = remain<=0;
   const pot = (race.wagers||[]).reduce((s,w)=> s+w.amount,0);
   const myWagers = (race.wagers||[]).filter(w=> w.user===me.username);
+  const myHorseId = myWagers.length ? myWagers[0].horseId : null;
+  const minBet = horseMinBet();
   const grid = race.horses.map(h=>{
     const pool = (race.wagers||[]).filter(w=> w.horseId===h.id).reduce((s,w)=> s+w.amount,0);
-    const sharePct = pot>0 ? Math.max(2, (pool/pot)*100) : 0;
+    const barPct = pot>0 ? Math.max(pool>0?2:0, (pool/pot)*100) : 0;
+    const lockedForMe = myHorseId && myHorseId!==h.id;
+    const votersByUser = {};
+    race.wagers.filter(w=> w.horseId===h.id).forEach(w=>{ votersByUser[w.user] = (votersByUser[w.user]||0) + w.amount; });
+    const voterNames = Object.keys(votersByUser);
     return `
-      <div class="horse-pick" style="position:relative;overflow:hidden;">
-        ${pool ? `<div class="opt-progress" style="width:${sharePct.toFixed(1)}%;"></div>` : ''}
-        <div style="position:relative;z-index:1;">
-          <div class="hname"><span class="jockey-dot" style="background:${h.color};"></span>${h.emoji} <span style="color:${h.color};font-weight:700;">${escapeHTML(h.name)}</span></div>
-          <div class="hpool mono ${pool?'opool-gold':''}">pote: ${fmt(pool)} pts</div>
-          <div class="hrow">
-            <input type="number" min="1" placeholder="pts" id="hwager_${h.id}" ${closing?'disabled':''} />
-            <button data-horse-bet="${h.id}" ${closing?'disabled':''}>Apostar</button>
-          </div>
+      <div class="horse-pick ${h.id===myHorseId?'mine':''}">
+        <div class="hname"><span class="jockey-dot" style="background:${h.color};"></span>${h.emoji} <span style="color:${h.color};font-weight:700;">${escapeHTML(h.name)}</span></div>
+        <div class="opool-badge" style="margin-bottom:6px;"><span class="coin">🪙</span><span class="amt mono">${fmt(pool)}</span></div>
+        <div class="opt-bar-track"><div class="opt-bar-fill" style="width:${barPct.toFixed(1)}%;"></div></div>
+        ${voterNames.length ? `<div class="voters-row" style="margin-bottom:6px;">${voterNames.map(v=> voterChipHTML(v, votersByUser[v], 16)).join('')}</div>` : ''}
+        <div class="hrow">
+          <input type="number" min="${minBet}" placeholder="min. ${minBet}" id="hwager_${h.id}" ${(closing||lockedForMe)?'disabled':''} />
+          <button data-horse-bet="${h.id}" ${(closing||lockedForMe)?'disabled':''}>Apostar</button>
         </div>
       </div>
     `;
   }).join('');
   return `
     <div class="race-status-bar">
-      <div class="rlabel">${closing ? 'Fechando apostas…' : 'Apostas abertas'} · pote total <span class="mono">${fmt(pot)} pts</span></div>
+      <div class="rlabel">${closing ? 'Fechando apostas…' : 'Apostas abertas'} · pote total <span class="mono">${fmt(pot)} pts</span> · mín. ${fmt(minBet)} pts</div>
       <div class="rcountdown mono" id="raceCountdown">${closing ? '⏳' : fmtClock(remain)}</div>
     </div>
+    ${myHorseId ? `<div class="admin-note" style="margin-bottom:8px;">Só dá pra apostar num cavalo por corrida — você já escolheu o seu.</div>` : ''}
     <div class="horse-pick-grid">${grid}</div>
     ${myWagers.length ? `<div class="my-horse-wagers">Você apostou: ${myWagers.map(w=>{
       const h = race.horses.find(x=> x.id===w.horseId);
@@ -206,14 +362,50 @@ function renderRaceResult(user, race){
 }
 
 // ---------------- Roleta ----------------
+const WHEEL_SEG_ANGLE = 360/37;
+const WHEEL_RADIUS = 96;
+let lastRouletteCycleStart = null;
+
 function rouletteColorHex(c){ return c==='green' ? '#2f9e5c' : c==='red' ? '#c9433f' : '#1a1a1a'; }
 function rouletteColorLabel(c){ return c==='green' ? 'verde' : c==='red' ? 'vermelho' : 'preto'; }
+
+function wheelGradient(){
+  const stops = WHEEL_ORDER.map((num,i)=>{
+    const c = rouletteColorHex(rouletteColor(num));
+    return `${c} ${(i*WHEEL_SEG_ANGLE).toFixed(3)}deg ${((i+1)*WHEEL_SEG_ANGLE).toFixed(3)}deg`;
+  });
+  return `conic-gradient(from 0deg, ${stops.join(', ')})`;
+}
+function wheelNumberLabels(){
+  return WHEEL_ORDER.map((num,i)=>{
+    const angle = i*WHEEL_SEG_ANGLE + WHEEL_SEG_ANGLE/2;
+    return `<div class="wheel-num" style="transform:translate(-50%,-50%) rotate(${angle}deg) translateY(-${WHEEL_RADIUS}px) rotate(${-angle}deg);">${num}</div>`;
+  }).join('');
+}
+// ângulo pra girar a roda até o número cair embaixo do ponteiro (topo),
+// mais `spins` voltas completas pra dar efeito de giro
+function wheelTargetRotation(num, spins){
+  const idx = WHEEL_ORDER.indexOf(num);
+  const angleOfNum = idx*WHEEL_SEG_ANGLE + WHEEL_SEG_ANGLE/2;
+  return 360*spins - angleOfNum;
+}
+function wheelHTML(rotationDeg){
+  return `
+    <div class="wheel-wrap">
+      <div class="wheel-pointer"></div>
+      <div class="wheel-disc" id="rouletteWheel" style="background:${wheelGradient()};transform:rotate(${rotationDeg}deg);">
+        ${wheelNumberLabels()}
+        <div class="wheel-hub">🎡</div>
+      </div>
+    </div>
+  `;
+}
 
 function rouletteHistoryHTML(rl){
   const hist = (rl.history||[]).slice(0,14);
   if(!hist.length) return '';
   return `<div style="display:flex;flex-wrap:wrap;margin-top:10px;">${hist.map(h=>
-    `<span title="${h.number} (${rouletteColorLabel(h.color)})" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;font-size:11.5px;font-weight:700;margin:2px;background:${rouletteColorHex(h.color)};color:#f3e9d8;border:1px solid rgba(255,255,255,.2);">${h.number}</span>`
+    `<span title="${h.number} (${rouletteColorLabel(h.color)})" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:10.5px;font-weight:700;margin:2px;background:${rouletteColorHex(h.color)};color:#f3e9d8;border:1px solid rgba(255,255,255,.2);">${h.number}</span>`
   ).join('')}</div>`;
 }
 
@@ -223,35 +415,89 @@ function renderRouletteBody(user, rl){
   return renderRouletteBetting(user, rl);
 }
 
+// marca quais "células" (número ou aposta externa) receberam ficha nova
+// desde o último render, pra animar só essas — e zera o controle quando
+// uma rodada nova começa.
+function markNewWagerCells(rl){
+  if(rl.cycleStartedAt !== lastRouletteCycleStart){
+    seenWagerIds.clear();
+    lastRouletteCycleStart = rl.cycleStartedAt;
+  }
+  const freshCells = new Set();
+  (rl.wagers||[]).forEach(w=>{
+    const wid = 'rl_'+w.ts+'_'+w.user+'_'+w.betType+'_'+w.betValue;
+    if(!seenWagerIds.has(wid)){
+      seenWagerIds.add(wid);
+      freshCells.add(w.betType+':'+w.betValue);
+    }
+  });
+  return freshCells;
+}
+
+function chipBadgeHTML(total, isNew){
+  if(!total) return '';
+  const txt = total>=1000 ? Math.round(total/100)/10+'k' : fmt(total);
+  return `<span class="chip-badge ${isNew?'chip-pop':''}">${txt}</span>`;
+}
+
 function renderRouletteBetting(user, rl){
   const locked = state.locks && state.locks.roulette;
   const remain = Math.max(0, (rl.bettingEndsAt||0) - now);
   const pot = (rl.wagers||[]).reduce((s,w)=> s+w.amount, 0);
   const myWagers = (rl.wagers||[]).filter(w=> w.user===me.username);
   const disabled = locked ? 'disabled' : '';
+  const minBet = rouletteMinBet();
+  const freshCells = markNewWagerCells(rl);
+  const idleRotation = rl.lastNumber!=null ? wheelTargetRotation(rl.lastNumber, 0) : 0;
+
+  const wagersByCell = {};
+  (rl.wagers||[]).forEach(w=>{
+    const key = w.betType+':'+w.betValue;
+    if(!wagersByCell[key]) wagersByCell[key] = {};
+    wagersByCell[key][w.user] = (wagersByCell[key][w.user]||0) + w.amount;
+  });
+  const cellTotal = key => Object.values(wagersByCell[key]||{}).reduce((s,a)=> s+a, 0);
 
   const numGrid = Array.from({length:37}, (_,n)=> n).map(n=>{
     const c = rouletteColor(n);
-    return `<button class="roulette-num" data-roulette-num="${n}" style="background:${rouletteColorHex(c)};" ${disabled}>${n}</button>`;
+    const key = 'numero:'+n;
+    const total = cellTotal(key);
+    const names = Object.keys(wagersByCell[key]||{});
+    return `<button class="roulette-num" data-roulette-num="${n}" style="background:${rouletteColorHex(c)};" title="${names.length?escapeAttr(names.join(', ')):''}" ${disabled}>${n}${chipBadgeHTML(total, freshCells.has(key))}</button>`;
+  }).join('');
+
+  const outsideDefs = [
+    ['cor:red','Vermelho','♦', `background:linear-gradient(180deg, #c9433f, #7a1f1f);color:#fff;`],
+    ['cor:black','Preto','♠', `background:linear-gradient(180deg, #2a2a2a, #0c0c0c);color:#fff;`],
+    ['paridade:par','Par','', ''],
+    ['paridade:impar','Ímpar','', ''],
+    ['metade:baixa','1–18','', ''],
+    ['metade:alta','19–36','', '']
+  ];
+  const outsideHTML = outsideDefs.map(([key,label,icon,style])=>{
+    const total = cellTotal(key);
+    const names = Object.keys(wagersByCell[key]||{});
+    return `
+      <div class="roulette-outside-cell">
+        <button data-roulette-outside="${key}" style="${style}" ${disabled}>${icon?`<span style="opacity:.75;margin-right:4px;">${icon}</span>`:''}${label}${chipBadgeHTML(total, freshCells.has(key))}</button>
+        ${names.length ? `<div class="voters-row" style="margin-top:5px;">${names.map(nm=> voterChipHTML(nm, wagersByCell[key][nm], 16)).join('')}</div>` : ''}
+      </div>
+    `;
   }).join('');
 
   return `
     <div class="race-status-bar">
-      <div class="rlabel">${locked ? 'Roleta fechada pelo host' : 'Apostas abertas'} · pote total <span class="mono">${fmt(pot)} pts</span></div>
+      <div class="rlabel">${locked ? 'Roleta fechada pelo host' : 'Apostas abertas'} · pote total <span class="mono">${fmt(pot)} pts</span> · mín. ${fmt(minBet)} pts</div>
       <div class="rcountdown mono" id="rouletteCountdown">${locked ? '🔒' : fmtClock(remain)}</div>
     </div>
-    ${!locked ? `<div class="admin-row" style="margin-bottom:10px;">
-      <span style="font-size:12px;color:var(--dim);">Valor da aposta:</span>
-      <input type="number" min="1" id="rouletteAmt" placeholder="pts" style="width:100px;" />
-    </div>` : ''}
-    <div class="roulette-grid">${numGrid}</div>
-    <div class="roulette-outside-row">
-      <button data-roulette-outside="cor:red" style="background:${rouletteColorHex('red')};color:#fff;" ${disabled}>Vermelho</button>
-      <button data-roulette-outside="cor:black" style="background:${rouletteColorHex('black')};color:#fff;" ${disabled}>Preto</button>
-      <button data-roulette-outside="paridade:par" ${disabled}>Par</button>
-      <button data-roulette-outside="paridade:impar" ${disabled}>Ímpar</button>
-      <button data-roulette-outside="metade:baixa" ${disabled}>1–18</button>
-      <button data-roulette-outside="metade:alta" ${disabled}>19–36</button>
+    <div class="roulette-table-wrap">
+      ${wheelHTML(idleRotation)}
+      ${!locked ? `<div class="roulette-bet-amt-row">
+        <span style="font-size:12px;color:var(--dim);">Valor da aposta:</span>
+        <input type="number" min="${minBet}" id="rouletteAmt" placeholder="min. ${minBet}" style="width:110px;" />
+      </div>` : ''}
+      <div class="roulette-grid">${numGrid}</div>
+      <div class="roulette-outside-row">${outsideHTML}</div>
     </div>
     ${myWagers.length ? `<div class="my-horse-wagers">Você apostou: ${myWagers.map(w=> `<b>${fmt(w.amount)}</b> em ${rouletteWagerLabel(w)}`).join(', ')}</div>` : ''}
     ${rouletteHistoryHTML(rl)}
@@ -266,26 +512,72 @@ function rouletteWagerLabel(w){
   if(w.betType==='metade') return w.betValue==='baixa' ? '1–18' : '19–36';
   return '?';
 }
+function rouletteWagerWon(w, num, color){
+  if(w.betType==='numero') return Number(w.betValue)===num;
+  if(w.betType==='cor') return color!=='green' && w.betValue===color;
+  if(w.betType==='paridade') return num!==0 && ((num%2===0 && w.betValue==='par')||(num%2===1 && w.betValue==='impar'));
+  if(w.betType==='metade') return num!==0 && ((num<=18 && w.betValue==='baixa')||(num>=19 && w.betValue==='alta'));
+  return false;
+}
+
+// lista o que cada um apostou nessa rodada — fácil de esquecer o que você
+// mesmo apostou enquanto a roleta gira. Com resolved=true (fase de resultado)
+// também mostra quem ganhou e quanto, quem perdeu e quanto.
+function rouletteWagersRecapHTML(rl, resolved){
+  const wagers = rl.wagers || [];
+  if(!wagers.length) return '';
+  const myWagers = wagers.filter(w=> w.user===me.username);
+  const num = rl.lastNumber, color = rl.lastColor;
+  const rows = [...wagers].reverse().map(w=>{
+    let deltaHTML = '';
+    if(resolved){
+      const won = rouletteWagerWon(w, num, color);
+      const mult = w.betType==='numero' ? 36 : 2;
+      const delta = won ? w.amount*(mult-1) : -w.amount;
+      deltaHTML = `<span class="mono roulette-recap-delta ${won?'win':'lose'}">${delta>0?'+':''}${fmt(delta)}</span>`;
+    }
+    return `
+      <div class="roulette-recap-row ${w.user===me.username?'mine':''}">
+        <span class="roulette-recap-who">${voterChipHTML(w.user, null, 22)}<span class="name-clip" style="max-width:150px;">${w.user===me.username?'<b>você</b> — ':''}${escapeHTML(rouletteWagerLabel(w))}</span></span>
+        <span class="roulette-recap-amt"><span class="mono">${fmt(w.amount)} pts</span>${deltaHTML}</span>
+      </div>
+    `;
+  }).join('');
+  return `
+    <div class="roulette-recap">
+      ${myWagers.length ? `<div class="my-horse-wagers">Sua aposta: ${myWagers.map(w=> `<b>${fmt(w.amount)}</b> em ${rouletteWagerLabel(w)}`).join(', ')}</div>` : ''}
+      <div class="admin-note" style="margin-bottom:8px;">${resolved ? 'Quem ganhou e quem perdeu nessa rodada:' : 'O que cada um apostou nessa rodada:'}</div>
+      <div class="roulette-recap-list">${rows}</div>
+    </div>
+  `;
+}
 
 function renderRouletteSpinning(rl){
   const remainSec = rl.spinEndsAt ? Math.max(0, Math.ceil((rl.spinEndsAt-now)/1000)) : 0;
+  const t = rl.spinStartedAt ? Math.max(0, Math.min(1, (now-rl.spinStartedAt)/(rl.spinEndsAt-rl.spinStartedAt))) : 0;
+  const eased = 1 - Math.pow(1-t, 2);
+  const rotation = eased * wheelTargetRotation(rl.resultNumber, 8);
   return `
     <div class="race-status-bar">
       <div class="rlabel">🎡 Girando…</div>
       <div class="rcountdown mono" id="rouletteCountdown">${remainSec}s</div>
     </div>
-    <div class="roulette-spin-display" id="rouletteSpinNum">–</div>
+    <div class="roulette-table-wrap">${wheelHTML(rotation)}</div>
+    ${rouletteWagersRecapHTML(rl, false)}
     ${rouletteHistoryHTML(rl)}
   `;
 }
 
 function renderRouletteResult(rl){
   const remain = Math.max(0, (rl.resultEndsAt||0) - now);
+  const rotation = wheelTargetRotation(rl.lastNumber, 0);
   return `
+    <div class="roulette-table-wrap">${wheelHTML(rotation)}</div>
     <div class="race-result-banner">
       <div class="rwin"><span style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:${rouletteColorHex(rl.lastColor)};color:#fff;vertical-align:middle;margin-right:8px;">${rl.lastNumber}</span> ${rouletteColorLabel(rl.lastColor)}</div>
       <div style="font-size:12.5px;color:var(--dim);margin-top:4px;">Próxima rodada em <span class="mono" id="rouletteCountdown">${fmtClock(remain)}</span></div>
     </div>
+    ${rouletteWagersRecapHTML(rl, true)}
     ${rouletteHistoryHTML(rl)}
   `;
 }
@@ -295,12 +587,16 @@ async function refreshAndSave(mutator){
   processExpiredBets();
   processHorseRace();
   processRoulette();
+  processBlackjackTable();
   mutator();
   await saveState();
   render();
 }
 
 function bindGames(){
+  document.querySelectorAll('[data-gamestab]').forEach(b=>{
+    b.onclick = ()=>{ gamesTab = b.dataset.gamestab; render(); };
+  });
   const hc = document.getElementById('raceHorseCount');
   if(hc) hc.onchange = ()=>{ raceHorseCount = parseInt(hc.value,10); };
   const rd = document.getElementById('raceDuration');
@@ -326,12 +622,16 @@ function bindGames(){
       const horseId = btn.dataset.horseBet;
       const input = document.getElementById('hwager_'+horseId);
       const amt = parseInt(input.value, 10);
+      const minBet = horseMinBet();
       if(!amt || amt<=0){ toast('Digite um valor válido'); return; }
+      if(amt < minBet){ toast(`Aposta mínima: ${fmt(minBet)} pts`); return; }
       await loadState();
       processExpiredBets(); processHorseRace(); processRoulette();
       const race = state.horseRace;
       const u = state.users[me.key];
       if(race.status!=='apostas'){ toast('As apostas já fecharam'); render(); return; }
+      const already = race.wagers.find(w=> w.user===me.username);
+      if(already && already.horseId!==horseId){ toast('Você só pode apostar em um cavalo por corrida'); render(); return; }
       if(amt > u.balance){ toast('Pontos insuficientes'); return; }
       u.balance -= amt;
       race.wagers.push({ user: me.username, horseId, amount: amt, ts: Date.now() });
@@ -370,7 +670,9 @@ function bindGames(){
     if(state.locks && state.locks.roulette){ toast('Roleta fechada pelo host'); return; }
     const amtEl = document.getElementById('rouletteAmt');
     const amt = parseInt(amtEl ? amtEl.value : '', 10);
+    const minBet = rouletteMinBet();
     if(!amt || amt<=0){ toast('Digite um valor válido no campo de pontos'); return; }
+    if(amt < minBet){ toast(`Aposta mínima: ${fmt(minBet)} pts`); return; }
     await loadState();
     processExpiredBets(); processHorseRace(); processRoulette();
     const rl = state.roulette;
@@ -399,12 +701,59 @@ function bindGames(){
       if(rl.phase==='apostas') rl.bettingEndsAt = Date.now();
     });
   };
+
+  const bjJoinBtn = document.getElementById('bjJoinBtn');
+  if(bjJoinBtn) bjJoinBtn.onclick = async ()=>{
+    if(state.locks && state.locks.blackjack){ toast('Blackjack fechado pelo host'); return; }
+    const input = document.getElementById('bjBetInput');
+    const amt = parseInt(input ? input.value : '', 10);
+    await loadState();
+    processExpiredBets(); processHorseRace(); processRoulette(); processBlackjackTable();
+    const res = bjTableJoin(me.key, amt);
+    if(!res.ok){ toast(res.error||'Não deu pra sentar'); render(); return; }
+    await saveState();
+    toast('Sentou à mesa!');
+    render();
+  };
+  const bjLeaveBtn = document.getElementById('bjLeaveBtn');
+  if(bjLeaveBtn) bjLeaveBtn.onclick = async ()=>{
+    await loadState();
+    processExpiredBets(); processHorseRace(); processRoulette(); processBlackjackTable();
+    const res = bjTableLeave(me.key);
+    if(!res.ok){ toast(res.error||'Não deu'); render(); return; }
+    await saveState();
+    render();
+  };
+  const bjForceStartBtn = document.getElementById('bjForceStartBtn');
+  if(bjForceStartBtn) bjForceStartBtn.onclick = async ()=>{
+    await loadState();
+    processExpiredBets(); processHorseRace(); processRoulette(); processBlackjackTable();
+    const res = bjTableForceStart();
+    if(!res.ok){ toast(res.error||'Não deu'); render(); return; }
+    await saveState();
+    render();
+  };
+  const bjHitBtn = document.getElementById('bjHitBtn');
+  if(bjHitBtn) bjHitBtn.onclick = async ()=>{
+    await loadState();
+    processExpiredBets(); processHorseRace(); processRoulette(); processBlackjackTable();
+    bjTableHit(me.key);
+    await saveState();
+    render();
+  };
+  const bjStandBtn = document.getElementById('bjStandBtn');
+  if(bjStandBtn) bjStandBtn.onclick = async ()=>{
+    await loadState();
+    processExpiredBets(); processHorseRace(); processRoulette(); processBlackjackTable();
+    bjTableStand(me.key);
+    await saveState();
+    render();
+  };
 }
 
 function startLiveLoop(){
   if(liveLoopHandle) return; // já está rodando
   let lastFrame = 0;
-  let lastSpinFlicker = 0;
   function frame(ts){
     if(!lastFrame || ts - lastFrame > 33){ // ~30fps
       lastFrame = ts;
@@ -441,14 +790,26 @@ function startLiveLoop(){
         } else if(rl.phase==='girando'){
           const cd = document.getElementById('rouletteCountdown');
           if(cd){ const remainSec = Math.max(0, Math.ceil(((rl.spinEndsAt||now)-now)/1000)); cd.textContent = remainSec+'s'; }
-          if(ts - lastSpinFlicker > 70){
-            lastSpinFlicker = ts;
-            const numEl = document.getElementById('rouletteSpinNum');
-            if(numEl) numEl.textContent = Math.floor(Math.random()*37);
+          const wheelEl = document.getElementById('rouletteWheel');
+          if(wheelEl && rl.spinStartedAt && rl.spinEndsAt){
+            const t = Math.max(0, Math.min(1, (now-rl.spinStartedAt)/(rl.spinEndsAt-rl.spinStartedAt)));
+            const eased = 1 - Math.pow(1-t, 2);
+            const rotation = eased * wheelTargetRotation(rl.resultNumber, 8);
+            wheelEl.style.transform = `rotate(${rotation}deg)`;
           }
         } else if(rl.phase==='resultado'){
           const cd = document.getElementById('rouletteCountdown');
           if(cd){ const remain = Math.max(0, (rl.resultEndsAt||0) - now); cd.textContent = fmtClock(remain); }
+        }
+      }
+      const bj = state.blackjackTable;
+      if(bj){
+        if(bj.phase==='aberta' && bj.autoStartAt){
+          const el = document.getElementById('bjAutoStartCountdown');
+          if(el){ const remain = Math.max(0, bj.autoStartAt-now); el.textContent = fmtClock(remain); }
+        } else if(bj.phase==='resultado' && bj.resultEndsAt){
+          const el = document.getElementById('bjResultCountdown');
+          if(el){ const remain = Math.max(0, bj.resultEndsAt-now); el.textContent = fmtClock(remain); }
         }
       }
     }
@@ -468,7 +829,8 @@ async function boot(){
     const c1 = processExpiredBets();
     const c2 = processHorseRace();
     const c3 = processRoulette();
-    if(c1 || c2 || c3) await saveState();
+    const c4 = processBlackjackTable();
+    if(c1 || c2 || c3 || c4) await saveState();
   }
   render();
   startLiveLoop();
@@ -485,7 +847,8 @@ async function boot(){
       const c1 = processExpiredBets();
       const c2 = processHorseRace();
       const c3 = processRoulette();
-      if(c1 || c2 || c3) await saveState();
+      const c4 = processBlackjackTable();
+      if(c1 || c2 || c3 || c4) await saveState();
     }
     render();
   }, 1200);
